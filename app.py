@@ -86,14 +86,16 @@ if "step" not in st.session_state:
     st.session_state.step = "inputs"
 
 # Persisted form fields (with sensible defaults)
+# Session defaults
 for key, default in {
     "warehouse": "-- Select a warehouse --",
     "buying_transport_cost": 0.0,
     "pieces": 1,
     "pallets": 1,
-    "weeks": 1,
+    "weeks": 2,   # ← set default to 2
 }.items():
     st.session_state.setdefault(key, default)
+
 
 WAREHOUSES: list[str] = [
     "Netherlands / SVZ",
@@ -184,12 +186,12 @@ if st.session_state.step == "inputs":
             )
 
         with c4:
-            st.markdown("Weeks in Storage <span style='color:red'>*</span>", unsafe_allow_html=True)
+            st.markdown("Weeks in Storage (min 2) <span style='color:red'>*</span>", unsafe_allow_html=True)
             weeks = st.number_input(
                 "Weeks in Storage",
-                min_value=1,
+                min_value=2,                        # ← enforce at least 2
                 step=1,
-                value=int(st.session_state.weeks),
+                value=int(max(2, st.session_state.weeks)),  # ← keep UI safe if session had 1
                 format="%d",
                 label_visibility="collapsed",
             )
@@ -197,21 +199,24 @@ if st.session_state.step == "inputs":
         next_clicked = st.form_submit_button("Next →", type="primary")
 
     if next_clicked:
-        # Basic validation before progressing to details
         if warehouse == "-- Select a warehouse --":
             st.warning("Please select a warehouse to continue.")
             st.stop()
 
         if pallets > 66:
-            st.error(
-                "❌ Invalid input: Pallets cannot exceed 66. "
-                "Please enter a valid pallet number."
-            )
+            st.error("❌ Invalid input: Pallets cannot exceed 66. Please enter a valid pallet number.")
+            st.stop()
+
+        if weeks < 2:   # ← new rule
+            st.error("You need to order at least 2 weeks of storage.")
             st.stop()
 
         if any(v is None or v <= 0 for v in [pieces, pallets, weeks]):
             st.warning("Fields marked with a red * are mandatory and must be greater than 0.")
             st.stop()
+
+        # ... proceed to save into session_state and go to details
+
 
         # Persist to session and go to Step 2
         st.session_state.warehouse = warehouse
