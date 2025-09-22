@@ -111,7 +111,7 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
 
     gross_margin_pct  = (gross_profit / total_revenue * 100.0) if total_revenue > 0 else 0.0
     net_margin_pct    = (net_profit   / total_revenue * 100.0) if total_revenue > 0 else 0.0
-
+    total_cost = (unit_gross_cost * pieces) + delivery_transport_total
     # Context line
     st.caption(
         f"Rounded VVP Cost / pc: **€{unit_vvp:.2f}**  |  "
