@@ -116,7 +116,7 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     # PROFIT/MARGINS (naming corrected earlier requests)
     # Gross = Revenue − Purchase (ops & delivery excluded)
     gross_cost   = purchase_price_per_piece * pieces
-    gross_profit = total_revenue - gross_cost
+    gross_profit = total_revenue - total_cost
     gross_margin = (gross_profit / total_revenue * 100.0) if total_revenue > 0 else 0.0
 
     # Net = Revenue − ALL costs (unit_total_cost already includes ops + purchase + delivery)
