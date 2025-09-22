@@ -106,7 +106,6 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     unit_total_cost = (
         unit_operational_cost
         + purchase_price_per_piece
-        + delivery_transport_per_piece
     )
 
     # Totals
@@ -120,7 +119,7 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     gross_margin = (gross_profit / total_revenue * 100.0) if total_revenue > 0 else 0.0
 
     # Net = Revenue − ALL costs (unit_total_cost already includes ops + purchase + delivery)
-    net_profit = total_revenue - total_cost
+    net_profit = total_revenue - total_cost - delivery_transport_total
     net_margin = (net_profit / total_revenue * 100.0) if total_revenue > 0 else 0.0
 
     # --- Summary (aligned) ---
