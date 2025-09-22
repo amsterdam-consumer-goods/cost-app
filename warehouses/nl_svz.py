@@ -4,7 +4,8 @@ import streamlit as st
 from .final_calc import final_calculator
 from .second_leg import second_leg_ui   # <-- NEW
 
-def compute_nl_svz(pieces: int, pallets: int, weeks: int, buying_transport_cost: float):
+def compute_nl_svz(pieces: int, pallets: int, weeks: int,
+                   buying_transport_cost: float, pallet_unit_cost: float):
     """
     Netherlands / SVZ
       - Inbound  : €2.75 / pallet
@@ -59,9 +60,20 @@ def compute_nl_svz(pieces: int, pallets: int, weeks: int, buying_transport_cost:
     )
 
     # ---- Totals (VVP) ----
+    # Pallet cost (optional, € per pallet)
+    pallet_total_cost = pallets * pallet_unit_cost  # ← NEW
+
+    # ---- Totals (VVP) ----
     warehousing_total = warehousing_one_round + extra_warehousing_on_return
-    base_total = warehousing_total + labelling_cost + transfer_cost + buying_transport_cost
-    total_cost = base_total + second_leg_added_cost  # <-- NEW
+    base_total = (
+        warehousing_total
+        + labelling_cost
+        + transfer_cost
+        + buying_transport_cost
+        + pallet_total_cost          # ← NEW
+    )
+    total_cost = base_total + second_leg_added_cost  # varsa 2. bacak ekliyorsun zaten
+
 
     cost_per_piece = (total_cost / pieces) if pieces else 0.0
     cost_per_piece_rounded = math.ceil(cost_per_piece * 100) / 100.0

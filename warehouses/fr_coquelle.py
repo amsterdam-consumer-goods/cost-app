@@ -4,12 +4,8 @@ import streamlit as st
 from .final_calc import final_calculator
 from .second_leg import second_leg_ui   # <-- second-leg picker & cost
 
-def compute_fr_coquelle(
-    pieces: int,
-    pallets: int,
-    weeks: int,
-    buying_transport_cost: float,
-):
+def compute_fr_coquelle(pieces: int, pallets: int, weeks: int,
+                   buying_transport_cost: float, pallet_unit_cost: float):
     """
     France / Coquelle
 

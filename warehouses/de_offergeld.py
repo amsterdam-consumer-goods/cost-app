@@ -5,12 +5,8 @@ from .final_calc import final_calculator
 from .second_leg import second_leg_ui   # <-- NEW (second-leg hook)
 
 
-def compute_de_offergeld(
-    pieces: int,
-    pallets: int,          # integers now
-    weeks: int,
-    buying_transport_cost: float,
-):
+def compute_de_offergeld(pieces: int, pallets: int, weeks: int,
+                   buying_transport_cost: float, pallet_unit_cost: float):
     """
     Germany / Offergeld
 

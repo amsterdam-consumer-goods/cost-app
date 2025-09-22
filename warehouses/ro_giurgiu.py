@@ -4,12 +4,8 @@ import streamlit as st
 from .final_calc import final_calculator
 from .second_leg import second_leg_ui   # <-- add this import
 
-def compute_ro_giurgiu(
-    pieces: int,
-    pallets: int,
-    weeks: int,
-    buying_transport_cost: float,
-):
+def compute_ro_giurgiu(pieces: int, pallets: int, weeks: int,
+                   buying_transport_cost: float, pallet_unit_cost: float):
     """
     Romania / Giurgiu
 

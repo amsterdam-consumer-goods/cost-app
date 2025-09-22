@@ -92,7 +92,8 @@ for key, default in {
     "buying_transport_cost": 0.0,
     "pieces": 1,
     "pallets": 1,
-    "weeks": 2,   # ← set default to 2
+    "weeks": 2,
+    "pallet_unit_cost": 0.0,   # ← NEW: € per pallet (optional)
 }.items():
     st.session_state.setdefault(key, default)
 
@@ -107,26 +108,20 @@ WAREHOUSES: list[str] = [
 ]
 
 
-def _dispatch(
-    warehouse: str,
-    pieces: int,
-    pallets: int,
-    weeks: int,
-    buying_transport_cost: float,
-) -> None:
-    """Route to the selected warehouse’s calculation UI."""
+def _dispatch(warehouse: str, pieces: int, pallets: int, weeks: int,
+              buying_transport_cost: float, pallet_unit_cost: float):
     if warehouse == "Netherlands / SVZ":
-        compute_nl_svz(pieces, pallets, weeks, buying_transport_cost)
+        compute_nl_svz(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "Germany / Offergeld":
-        compute_de_offergeld(pieces, pallets, weeks, buying_transport_cost)
+        compute_de_offergeld(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "Slovakia / Arufel":
-        compute_sk_arufel(pieces, pallets, weeks, buying_transport_cost)
+        compute_sk_arufel(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "France / Coquelle":
-        compute_fr_coquelle(pieces, pallets, weeks, buying_transport_cost)
+        compute_fr_coquelle(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "Romania / Giurgiu":
-        compute_ro_giurgiu(pieces, pallets, weeks, buying_transport_cost)
+        compute_ro_giurgiu(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "Netherlands / Mentrex":
-        compute_nl_mentrex(pieces, pallets, weeks, buying_transport_cost)
+        compute_nl_mentrex(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     else:
         st.info("This warehouse’s specific rules are not implemented yet.")
 
@@ -178,11 +173,15 @@ if st.session_state.step == "inputs":
             st.markdown("Pallets (#) <span style='color:red'>*</span>", unsafe_allow_html=True)
             pallets = st.number_input(
                 "Pallets (#)",
-                min_value=1,
-                step=1,
+                min_value=1, step=1,
                 value=int(st.session_state.pallets),
-                format="%d",
-                label_visibility="collapsed",
+                format="%d", label_visibility="collapsed",
+            )
+            pallet_unit_cost = st.number_input(
+                "Pallet Cost (€ per pallet) — optional",
+                min_value=0.0, step=0.01,
+                value=float(st.session_state.pallet_unit_cost),
+                format="%.2f",
             )
 
         with c4:
@@ -224,6 +223,7 @@ if st.session_state.step == "inputs":
         st.session_state.pieces = int(pieces)
         st.session_state.pallets = int(pallets)
         st.session_state.weeks = int(weeks)
+        st.session_state.pallet_unit_cost = float(pallet_unit_cost)  # ← NEW
         st.session_state.step = "details"
         st.rerun()
 
@@ -265,4 +265,6 @@ else:
         st.session_state.pallets,
         st.session_state.weeks,
         st.session_state.buying_transport_cost,
+        st.session_state.pallet_unit_cost,   # ← NEW
     )
+

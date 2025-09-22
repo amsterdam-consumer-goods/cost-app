@@ -4,12 +4,8 @@ from .final_calc import final_calculator
 from .second_leg import second_leg_ui
 
 
-def compute_nl_mentrex(
-    pieces: int,
-    pallets: int,
-    weeks: int,
-    buying_transport_cost: float,
-):
+def compute_nl_mentrex(pieces: int, pallets: int, weeks: int,
+                   buying_transport_cost: float, pallet_unit_cost: float):
     """
     Netherlands / Mentrex — first leg.
     - Warehousing (in/out/storage) + order fixed fee when inbound happens.
