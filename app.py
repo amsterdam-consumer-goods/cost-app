@@ -1,4 +1,7 @@
+# app.py
+import os
 import streamlit as st
+
 from warehouses.nl_svz import compute_nl_svz
 from warehouses.de_offergeld import compute_de_offergeld
 from warehouses.fr_coquelle import compute_fr_coquelle
@@ -6,7 +9,57 @@ from warehouses.sk_arufel import compute_sk_arufel
 from warehouses.nl_mentrex import compute_nl_mentrex
 from warehouses.ro_giurgiu import compute_ro_giurgiu
 
+# ---------------------------
+# Password gate (via Secrets)
+# ---------------------------
+def check_password() -> bool:
+    """
+    Returns True if the correct password is entered.
+    Password is read from:
+      1) st.secrets["APP_PASSWORD"] on Streamlit Cloud
+      2) os.environ["APP_PASSWORD"] locally (fallback)
+    """
+    secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
+
+    # If no password is configured, don't block (useful in local dev)
+    if not secret_pw:
+        return True
+
+    # Already authenticated in this session?
+    if st.session_state.get("auth_ok"):
+        return True
+
+    # Ask for password
+    st.title("🔐 Enter Password")
+    pw = st.text_input("Password", type="password", placeholder="Enter password…")
+    col1, _ = st.columns([1, 3])
+    with col1:
+        if st.button("Sign in"):
+            st.session_state.auth_ok = (pw == str(secret_pw))
+            if not st.session_state.auth_ok:
+                st.error("Incorrect password.")
+            else:
+                st.rerun()
+
+    return False
+
+
+# ---------------------------
+# Page config
+# ---------------------------
 st.set_page_config(page_title="VVP Calculator", layout="wide")
+
+# Password wall (block app until authenticated)
+if not check_password():
+    st.stop()
+
+# Optional: quick logout button (top-right)
+rcol = st.columns([6, 1])[1]
+with rcol:
+    if st.button("Logout"):
+        st.session_state.pop("auth_ok", None)
+        st.rerun()
+
 st.title("VVP Calculator")
 
 # ---------------------------------
@@ -33,6 +86,7 @@ WAREHOUSES = [
     "Netherlands / Mentrex",
 ]
 
+
 def _dispatch(warehouse: str, pieces: int, pallets: int, weeks: int, buying_transport_cost: float):
     if warehouse == "Netherlands / SVZ":
         compute_nl_svz(pieces, pallets, weeks, buying_transport_cost)
@@ -49,6 +103,7 @@ def _dispatch(warehouse: str, pieces: int, pallets: int, weeks: int, buying_tran
     else:
         st.info("This warehouse’s specific rules are not implemented yet.")
 
+
 # =========================
 # STEP 1: INPUTS (form)
 # =========================
@@ -57,7 +112,8 @@ if st.session_state.step == "inputs":
         "Select Warehouse",
         ["-- Select a warehouse --"] + WAREHOUSES,
         index=(["-- Select a warehouse --"] + WAREHOUSES).index(st.session_state.warehouse)
-        if st.session_state.warehouse in ["-- Select a warehouse --"] + WAREHOUSES else 0
+        if st.session_state.warehouse in ["-- Select a warehouse --"] + WAREHOUSES
+        else 0,
     )
 
     st.subheader("Order Inputs")
@@ -69,26 +125,41 @@ if st.session_state.step == "inputs":
             st.markdown("Buying Transport Cost (€ total)", unsafe_allow_html=True)
             buying_transport_cost = st.number_input(
                 label="Buying Transport Cost (€ total)",
-                min_value=0.0, step=1.0, value=float(st.session_state.buying_transport_cost),
-                format="%.2f", label_visibility="collapsed",
+                min_value=0.0,
+                step=1.0,
+                value=float(st.session_state.buying_transport_cost),
+                format="%.2f",
+                label_visibility="collapsed",
             )
         with c2:
             st.markdown("Pieces (#) <span style='color:red'>*</span>", unsafe_allow_html=True)
             pieces = st.number_input(
-                label="Pieces (#)", min_value=1, step=1, value=int(st.session_state.pieces),
-                format="%d", label_visibility="collapsed",
+                label="Pieces (#)",
+                min_value=1,
+                step=1,
+                value=int(st.session_state.pieces),
+                format="%d",
+                label_visibility="collapsed",
             )
         with c3:
             st.markdown("Pallets (#) <span style='color:red'>*</span>", unsafe_allow_html=True)
             pallets = st.number_input(
-                label="Pallets (#)", min_value=1, step=1, value=int(st.session_state.pallets),
-                format="%d", label_visibility="collapsed",
+                label="Pallets (#)",
+                min_value=1,
+                step=1,
+                value=int(st.session_state.pallets),
+                format="%d",
+                label_visibility="collapsed",
             )
         with c4:
             st.markdown("Weeks in Storage <span style='color:red'>*</span>", unsafe_allow_html=True)
             weeks = st.number_input(
-                label="Weeks in Storage", min_value=1, step=1, value=int(st.session_state.weeks),
-                format="%d", label_visibility="collapsed",
+                label="Weeks in Storage",
+                min_value=1,
+                step=1,
+                value=int(st.session_state.weeks),
+                format="%d",
+                label_visibility="collapsed",
             )
 
         next_clicked = st.form_submit_button("Next →", type="primary")
