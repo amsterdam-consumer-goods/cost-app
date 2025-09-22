@@ -253,6 +253,7 @@ else:
         st.metric("Pieces (#)", f"{st.session_state.pieces}")
     with s3:
         st.metric("Pallets (#)", f"{st.session_state.pallets}")
+        st.metric("Pallet Cost (€)", f"{st.session_state.pallet_unit_cost}")
     with s4:
         st.metric("Weeks in Storage", f"{st.session_state.weeks}")
 
