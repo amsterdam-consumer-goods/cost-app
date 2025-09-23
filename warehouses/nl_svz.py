@@ -60,17 +60,12 @@ def compute_nl_svz(pieces: int, pallets: int, weeks: int,
     )
 
     # ---- Totals (VVP) ----
-    # Pallet cost (optional, € per pallet)
-    pallet_total_cost = pallets * pallet_unit_cost  # ← NEW
-
-    # ---- Totals (VVP) ----
     warehousing_total = warehousing_one_round + extra_warehousing_on_return
     base_total = (
         warehousing_total
         + labelling_cost
         + transfer_cost
         + buying_transport_cost
-        + pallet_total_cost          # ← NEW
     )
     total_cost = base_total + second_leg_added_cost  # varsa 2. bacak ekliyorsun zaten
 

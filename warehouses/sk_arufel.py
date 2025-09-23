@@ -22,7 +22,6 @@ def compute_sk_arufel(
     pallets: int,
     weeks: int,                     # kept for signature consistency (not used in this WH)
     buying_transport_cost: float,
-    pallet_unit_cost: float,        # ← NEW: optional pallet cost per pallet
 ) -> None:
     """
     Render the Slovakia / Arufel calculator and results.
@@ -51,9 +50,6 @@ def compute_sk_arufel(
     warehouse_fixed = WH_FIXED_PER_SHIPMENT if (pallets > 0 and pieces > 0) else 0.0
     labelling_cost  = LABELLING_PER_PIECE * pieces if do_labelling else 0.0
 
-    # Optional pallet cost
-    pallet_total_cost = pallets * pallet_unit_cost if pallet_unit_cost else 0.0
-
     warehousing_total = warehouse_fixed  # no in/out/storage breakdown for this WH
 
     # ================================================================
@@ -67,7 +63,7 @@ def compute_sk_arufel(
     # ================================================================
     # Totals for VVP
     # ================================================================
-    base_total = warehousing_total + labelling_cost + buying_transport_cost + pallet_total_cost
+    base_total = warehousing_total + labelling_cost + buying_transport_cost 
     total_cost = base_total + second_leg_added_cost
 
     cost_per_piece         = (total_cost / pieces) if pieces else 0.0
@@ -94,8 +90,6 @@ def compute_sk_arufel(
             "Warehouse Fixed Cost (€)": round(warehouse_fixed, 2),
             "Labelling applied?": do_labelling,
             "Labelling Cost (€)": round(labelling_cost, 2),
-            "Pallet Cost (€ per pallet)": round(pallet_unit_cost, 2),
-            "Pallet Cost TOTAL (€)": round(pallet_total_cost, 2),
             "Buying Transport Cost (€ TOTAL)": round(buying_transport_cost, 2),
             "Warehousing Total (1st leg) (€)": round(warehousing_total, 2),
         }
