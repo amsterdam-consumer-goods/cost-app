@@ -22,6 +22,7 @@ def compute_sk_arufel(
     pallets: int,
     weeks: int,                     # kept for signature consistency (not used in this WH)
     buying_transport_cost: float,
+    pallet_unit_cost: float,        # accepted for signature consistency; NOT used yet
 ) -> None:
     """
     Render the Slovakia / Arufel calculator and results.
@@ -29,7 +30,7 @@ def compute_sk_arufel(
     Fixed rates:
       - Warehouse fixed charge (per shipment): €360 (applies only if inbound exists)
       - Labelling (if selected): €0.03 per piece (label + labelling total)
-      - Optional pallet cost: user-defined €/pallet, applied if > 0
+      - Optional pallet cost param is accepted for signature consistency but NOT applied yet.
     """
     st.subheader("Slovakia / Arufel")
 
@@ -58,12 +59,13 @@ def compute_sk_arufel(
     second_leg_added_cost, second_leg_breakdown = second_leg_ui(
         primary_warehouse="Slovakia / Arufel",
         pallets=pallets,
+        pieces=pieces,  # harmless if ignored internally
     )
 
     # ================================================================
     # Totals for VVP
     # ================================================================
-    base_total = warehousing_total + labelling_cost + buying_transport_cost 
+    base_total = warehousing_total + labelling_cost + buying_transport_cost
     total_cost = base_total + second_leg_added_cost
 
     cost_per_piece         = (total_cost / pieces) if pieces else 0.0
@@ -92,6 +94,10 @@ def compute_sk_arufel(
             "Labelling Cost (€)": round(labelling_cost, 2),
             "Buying Transport Cost (€ TOTAL)": round(buying_transport_cost, 2),
             "Warehousing Total (1st leg) (€)": round(warehousing_total, 2),
+
+            # Signature consistency note — not applied yet:
+            "Pallet Unit Cost input (€/pallet)": round(pallet_unit_cost or 0.0, 2),
+            "Pallet Unit Cost applied?": False,
         }
         if second_leg_breakdown:
             rows.update({"—— Second Leg ——": ""})
