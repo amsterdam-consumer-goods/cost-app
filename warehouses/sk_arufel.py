@@ -59,7 +59,6 @@ def compute_sk_arufel(
     second_leg_added_cost, second_leg_breakdown = second_leg_ui(
         primary_warehouse="Slovakia / Arufel",
         pallets=pallets,
-        pieces=pieces,  # harmless if ignored internally
     )
 
     # ================================================================
