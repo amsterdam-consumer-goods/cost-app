@@ -1,5 +1,19 @@
+# venv & cache
+venv/
 .venv/
 __pycache__/
+**/__pycache__/
 *.pyc
+
+# excel data
 data/*.xlsx
 
+# env files
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Streamlit local secrets (ASLA git'e girmesin)
+.streamlit/secrets.toml
