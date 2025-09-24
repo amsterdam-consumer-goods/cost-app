@@ -1,120 +1,175 @@
 """
-Internal transfer (2nd leg) calculator
+Second-leg (internal transfer) UI and calculation.
 
-What this does
---------------
-- Provides a compact Streamlit UI to optionally add a “second leg”
-  (transfer from the primary warehouse to another warehouse).
-- Uses simplified warehouse rate sheets (inbound, outbound, storage, fixed fees).
-- Does not include labelling costs (handled only in first leg).
-- Returns both the additional cost and a breakdown dictionary.
+Flow
+----
+- User enables "Second leg".
+- Selects the target warehouse (where the goods will be transferred to).
+- Inputs:
+    * Second-leg weeks in storage (at the target warehouse)
+    * Second-leg transport cost (total € for moving to target warehouse)
+- The second-leg warehousing cost is computed from the TARGET warehouse rates:
+    inbound €/pallet, outbound €/pallet, storage €/pallet/week, optional order fee.
+  For Slovakia / Arufel, second leg is a fixed €360 per order (no in/out/storage).
+- Return the amount to add into VVP (if enabled) and a transparent breakdown.
+
+API
+---
+second_leg_ui(primary_warehouse: str, pallets: int, pieces: int | None = None)
+    -> tuple[float, dict]
 """
 
 from __future__ import annotations
-
+from typing import Optional, TypedDict
 import streamlit as st
 
 
-# -------------------------------------------------------------------------
-# Rate sheet for all supported warehouses
-# (warehousing-only, no labelling costs here)
-# -------------------------------------------------------------------------
-RATES: dict[str, dict[str, float]] = {
-    "Netherlands / SVZ":     {"in": 2.75, "out": 2.75, "storage": 1.36, "fixed_per_order": 0.0},
-    "Germany / Offergeld":   {"in": 3.90, "out": 3.12, "storage": 1.40, "fixed_per_order": 0.0},
-    "France / Coquelle":     {"in": 4.90, "out": 4.90, "storage": 4.00, "fixed_per_order": 5.50},   # admin fee
-    "Slovakia / Arufel":     {"in": 0.0,  "out": 0.0,  "storage": 0.0,  "fixed_per_order": 360.0},  # flat per shipment
-    "Netherlands / Mentrex": {"in": 5.10, "out": 5.10, "storage": 1.40, "fixed_per_order": 50.0},   # order fee
-    "Romania / Giurgiu":     {"in": 2.30, "out": 2.30, "storage": 1.40, "fixed_per_order": 0.0},
+class WhRates(TypedDict, total=False):
+    name: str
+    inbound_per_pallet: float       # €/pallet
+    outbound_per_pallet: float      # €/pallet
+    storage_per_pallet_per_week: float  # €/pallet/week
+    order_fee: float                # €/order (optional)
+    fixed_per_order: float          # for flat pricing (e.g., Slovakia / Arufel)
+
+
+# Target-warehouse rate table (as given)
+TARGET_WAREHOUSE_RATES: dict[str, WhRates] = {
+    "Slovakia / Arufel": {
+        "name": "Slovakia / Arufel",
+        "fixed_per_order": 360.0,  # per 1 order fixed price of 360
+    },
+    "Romania / Giurgiu": {
+        "name": "Romania / Giurgiu",
+        "inbound_per_pallet": 2.30,
+        "outbound_per_pallet": 2.30,
+        "storage_per_pallet_per_week": 1.40,
+    },
+    "Netherlands / SVZ": {
+        "name": "Netherlands / SVZ",
+        "inbound_per_pallet": 2.75,
+        "outbound_per_pallet": 2.75,
+        "storage_per_pallet_per_week": 1.36,
+    },
+    "Netherlands / Mentrex": {
+        "name": "Netherlands / Mentrex",
+        "inbound_per_pallet": 5.10,
+        "outbound_per_pallet": 5.10,
+        "storage_per_pallet_per_week": 1.40,
+    },
+    "France / Coquelle": {
+        "name": "France / Coquelle",
+        "inbound_per_pallet": 5.20,
+        "outbound_per_pallet": 5.40,
+        "storage_per_pallet_per_week": 4.00,
+        "order_fee": 5.50,
+    },
+    "Germany / Offergeld": {
+        "name": "Germany / Offergeld",
+        "inbound_per_pallet": 3.30,
+        "outbound_per_pallet": 3.12,
+        "storage_per_pallet_per_week": 1.40,
+    },
 }
 
 
-def _warehousing_cost(wh: str, pallets: int, weeks: int) -> float:
-    """
-    Compute inbound + outbound + storage + fixed fees for a warehouse.
-
-    Args:
-        wh: Warehouse name (must exist in RATES).
-        pallets: Number of pallets stored/transferred.
-        weeks: Weeks spent in the warehouse.
-
-    Returns:
-        Total cost in EUR (float). Returns 0 if warehouse not in RATES.
-    """
-    r = RATES.get(wh)
-    if not r:
-        return 0.0
-
-    inbound = pallets * r["in"]
-    outbound = pallets * r["out"]
-    storage = pallets * weeks * r["storage"]
-    fixed = r.get("fixed_per_order", 0.0)
-
-    return inbound + outbound + storage + fixed
-
-
-def second_leg_ui(primary_warehouse: str, pallets: int) -> tuple[float, dict]:
-    """
-    Render a Streamlit UI to optionally add a second leg (internal transfer).
-
-    Args:
-        primary_warehouse: Warehouse chosen for the first leg.
-        pallets: Number of pallets transferred.
-
-    Returns:
-        (added_cost_eur, breakdown_dict)
-        - added_cost_eur: total extra cost for this leg
-        - breakdown_dict: detailed breakdown (empty if disabled)
-    """
-    st.markdown("### Internal Transfer (2nd leg) — optional")
-
-    enable = st.checkbox("Add a 2nd Warehouse Leg?")
-    if not enable:
-        return 0.0, {}
-    
-    # -------------------------------------------------------------------------
-    # Only allow warehouses other than the primary one
-    # -------------------------------------------------------------------------
-    options = [w for w in RATES.keys() if w != primary_warehouse]
-    second_wh = st.selectbox("2nd Warehouse", ["-- Select --"] + options, index=0)
-
-    # -------------------------------------------------------------------------
-    # Inputs for 2nd warehouse
-    # -------------------------------------------------------------------------
-    c1, c2 = st.columns(2)
-    with c1:
-        weeks2 = st.number_input(
-            "Weeks in 2nd Warehouse",
-            min_value=0,
-            step=1,
-            format="%d",
-        )
-    with c2:
-        inter_transport = st.number_input(
-            "Inter-Warehouse Transport (€ TOTAL)",
-            min_value=0.0,
-            step=1.0,
-            format="%.2f",
-        )
-
-    if second_wh == "-- Select --":
-        return 0.0, {}
-
-    # -------------------------------------------------------------------------
-    # Compute costs
-    # -------------------------------------------------------------------------
-    wh_cost = _warehousing_cost(second_wh, pallets, weeks2)
-    added_total = inter_transport + wh_cost
-    # -------------------------------------------------------------------------
-    # Build breakdown dict
-    # -------------------------------------------------------------------------
-    breakdown = {
-        "Second Warehouse": second_wh,
-        "Pallets (#)": pallets,
-        "Weeks at 2nd WH": weeks2,
-        "Inter-Warehouse Transport (€)": round(inter_transport, 2),
-        "2nd WH Warehousing (€)": round(wh_cost, 2),
-        "2nd Leg Total Add-On (€)": round(added_total, 2),
+def _compute_second_leg_cost(
+    target_wh: str,
+    pallets: int,
+    weeks_second_leg: int,
+    transport_cost_second_leg: float,
+) -> tuple[float, dict]:
+    """Compute the second-leg cost based on the target warehouse's rates."""
+    rates = TARGET_WAREHOUSE_RATES[target_wh]
+    breakdown: dict[str, object] = {
+        "—— Second Leg ——": "",
+        "Target Warehouse": target_wh,
     }
 
-    return added_total, breakdown
+    if "fixed_per_order" in rates:
+        # Slovakia / Arufel: flat per order
+        fixed = float(rates["fixed_per_order"])
+        subtotal = fixed + float(transport_cost_second_leg)
+        breakdown.update({
+            "Pricing Model": "Fixed per order",
+            "Fixed per order (€)": round(fixed, 2),
+            "Second-leg Transport (€)": round(transport_cost_second_leg, 2),
+            "Second-leg Subtotal (€)": round(subtotal, 2),
+        })
+        return subtotal, breakdown
+
+    # Pallet/Week-based model
+    in_cost = pallets * float(rates.get("inbound_per_pallet", 0.0))
+    out_cost = pallets * float(rates.get("outbound_per_pallet", 0.0))
+    storage_rate = float(rates.get("storage_per_pallet_per_week", 0.0))
+    storage_cost = pallets * weeks_second_leg * storage_rate
+    order_fee = float(rates.get("order_fee", 0.0))
+    subtotal = in_cost + out_cost + storage_cost + order_fee + float(transport_cost_second_leg)
+
+    breakdown.update({
+        "Pricing Model": "Inbound/Outbound/Storage",
+        "Inbound (€)": round(in_cost, 2),
+        "Outbound (€)": round(out_cost, 2),
+        "Storage (€)": round(storage_cost, 2),
+        "Order Fee (€)": round(order_fee, 2),
+        "Second-leg Transport (€)": round(transport_cost_second_leg, 2),
+        "Second-leg Subtotal (€)": round(subtotal, 2),
+    })
+    return subtotal, breakdown
+
+
+def second_leg_ui(
+    primary_warehouse: str,
+    pallets: int,
+    pieces: Optional[int] = None,  # kept for signature compatibility; not used here
+) -> tuple[float, dict]:
+    """Render second-leg UI and return (cost_to_add_into_vvp, breakdown_dict)."""
+    with st.expander("Second Leg (optional)"):
+        enabled = st.checkbox("Enable second leg")
+        if not enabled:
+            return 0.0, {}
+
+        # Target warehouse selection
+        options = list(TARGET_WAREHOUSE_RATES.keys())
+        default_idx = options.index("Romania / Giurgiu") if "Romania / Giurgiu" in options else 0
+        target_wh = st.selectbox("Target warehouse", options, index=default_idx)
+
+        # Inputs specific to second leg
+        c1, c2 = st.columns(2)
+        with c1:
+            weeks_second_leg = st.number_input(
+                "Weeks in storage (second leg)",
+                min_value=0,
+                step=1,
+                value=2,
+                format="%d",
+                help="Number of weeks the goods will stay at the target warehouse.",
+            )
+        with c2:
+            transport_cost_second_leg = st.number_input(
+                "Second-leg transport cost (€ total)",
+                min_value=0.0,
+                step=1.0,
+                value=0.0,
+                format="%.2f",
+                help="Transportation from the primary to the target warehouse.",
+            )
+
+        # Do the calculation
+        subtotal, breakdown = _compute_second_leg_cost(
+            target_wh=target_wh,
+            pallets=int(max(0, pallets)),
+            weeks_second_leg=int(max(0, weeks_second_leg)),
+            transport_cost_second_leg=float(transport_cost_second_leg),
+        )
+
+        # Include toggle (whether to add to VVP)
+        include = st.checkbox("Include second-leg subtotal in VVP?", value=True)
+        added = subtotal if include else 0.0
+        breakdown.update({
+            "Include in VVP?": include,
+            "Second-leg Added to VVP (€)": round(added, 2),
+        })
+
+        return added, breakdown
+
