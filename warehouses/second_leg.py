@@ -121,7 +121,7 @@ def _compute_second_leg_cost(
 def second_leg_ui(
     primary_warehouse: str,
     pallets: int,
-    pieces: Optional[int] = None,  # kept for signature compatibility; not used here
+    pieces: Optional[int] = None,  # signature aynı
 ) -> tuple[float, dict]:
     """Render second-leg UI and return (cost_to_add_into_vvp, breakdown_dict)."""
     with st.expander("Second Leg (optional)"):
@@ -163,13 +163,11 @@ def second_leg_ui(
             transport_cost_second_leg=float(transport_cost_second_leg),
         )
 
-        # Include toggle (whether to add to VVP)
-        include = st.checkbox("Include second-leg subtotal in VVP?", value=True)
-        added = subtotal if include else 0.0
+        # Auto-include in VVP (no extra checkbox)
+        added = subtotal
         breakdown.update({
-            "Include in VVP?": include,
+            "Include in VVP?": True,
             "Second-leg Added to VVP (€)": round(added, 2),
         })
 
         return added, breakdown
-

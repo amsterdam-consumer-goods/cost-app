@@ -20,6 +20,7 @@ from warehouses.nl_mentrex import compute_nl_mentrex
 from warehouses.nl_svz import compute_nl_svz
 from warehouses.ro_giurgiu import compute_ro_giurgiu
 from warehouses.sk_arufel import compute_sk_arufel
+from warehouses.es_decoexsa import compute_es_decoexsa
 
 
 # -----------------------------------------------------------------------------
@@ -31,34 +32,35 @@ st.set_page_config(page_title="VVP Calculator", layout="wide")
 # -----------------------------------------------------------------------------
 # Auth 
 # -----------------------------------------------------------------------------
-def check_password() -> bool:
-    """Return True if authenticated.
 
-    Order of precedence:
-      1) st.secrets["APP_PASSWORD"] (Streamlit Cloud)
-      2) os.environ["APP_PASSWORD"] (local/dev)
+# def check_password() -> bool:
+#     """Return True if authenticated.
 
-    If neither is set, access is allowed (useful for local development).
-    """
-    secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
-    if not secret_pw:  # no password configured
-        return True
+#     Order of precedence:
+#       1) st.secrets["APP_PASSWORD"] (Streamlit Cloud)
+#       2) os.environ["APP_PASSWORD"] (local/dev)
 
-    if st.session_state.get("auth_ok"):
-        return True
+#     If neither is set, access is allowed (useful for local development).
+#     """
+#     secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
+#     if not secret_pw:  # no password configured
+#         return True
 
-    st.title("🔐 Enter Password")
-    pw = st.text_input("Password", type="password", placeholder="Enter password…")
-    if st.button("Sign in"):
-        st.session_state.auth_ok = pw == str(secret_pw)
-        if not st.session_state.auth_ok:
-            st.error("Incorrect password.")
-        else:
-            st.rerun()
-    return False
+#     if st.session_state.get("auth_ok"):
+#         return True
 
-if not check_password():
-    st.stop()
+#     st.title("🔐 Enter Password")
+#     pw = st.text_input("Password", type="password", placeholder="Enter password…")
+#     if st.button("Sign in"):
+#         st.session_state.auth_ok = pw == str(secret_pw)
+#         if not st.session_state.auth_ok:
+#             st.error("Incorrect password.")
+#         else:
+#             st.rerun()
+#     return False
+
+# if not check_password():
+#     st.stop()
 
 # Quick logout (top-right)
 right_col = st.columns([6, 1])[1]
@@ -95,6 +97,7 @@ WAREHOUSES: list[str] = [
     "France / Coquelle",
     "Romania / Giurgiu",
     "Netherlands / Mentrex",
+    "Spain / Decoexsa"
 ]
 
 
@@ -119,6 +122,8 @@ def _dispatch(
         compute_ro_giurgiu(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     elif warehouse == "Netherlands / Mentrex":
         compute_nl_mentrex(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
+    elif warehouse == "Spain / Decoexsa":
+        compute_es_decoexsa(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
     else:
         st.info("This warehouse’s specific rules are not implemented yet.")
 
