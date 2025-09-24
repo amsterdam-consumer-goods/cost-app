@@ -33,34 +33,34 @@ st.set_page_config(page_title="VVP Calculator", layout="wide")
 # Auth 
 # -----------------------------------------------------------------------------
 
-# def check_password() -> bool:
-#     """Return True if authenticated.
+def check_password() -> bool:
+    """Return True if authenticated.
 
-#     Order of precedence:
-#       1) st.secrets["APP_PASSWORD"] (Streamlit Cloud)
-#       2) os.environ["APP_PASSWORD"] (local/dev)
+    Order of precedence:
+      1) st.secrets["APP_PASSWORD"] (Streamlit Cloud)
+      2) os.environ["APP_PASSWORD"] (local/dev)
 
-#     If neither is set, access is allowed (useful for local development).
-#     """
-#     secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
-#     if not secret_pw:  # no password configured
-#         return True
+    If neither is set, access is allowed (useful for local development).
+    """
+    secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
+    if not secret_pw:  # no password configured
+        return True
 
-#     if st.session_state.get("auth_ok"):
-#         return True
+    if st.session_state.get("auth_ok"):
+        return True
 
-#     st.title("🔐 Enter Password")
-#     pw = st.text_input("Password", type="password", placeholder="Enter password…")
-#     if st.button("Sign in"):
-#         st.session_state.auth_ok = pw == str(secret_pw)
-#         if not st.session_state.auth_ok:
-#             st.error("Incorrect password.")
-#         else:
-#             st.rerun()
-#     return False
+    st.title("🔐 Enter Password")
+    pw = st.text_input("Password", type="password", placeholder="Enter password…")
+    if st.button("Sign in"):
+        st.session_state.auth_ok = pw == str(secret_pw)
+        if not st.session_state.auth_ok:
+            st.error("Incorrect password.")
+        else:
+            st.rerun()
+    return False
 
-# if not check_password():
-#     st.stop()
+if not check_password():
+    st.stop()
 
 # Quick logout (top-right)
 right_col = st.columns([6, 1])[1]
