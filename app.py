@@ -4,18 +4,22 @@ Streamlit entrypoint for the VVP Calculator.
 - Sidebar has an Admin Login -> if correct, jump to Admin Panel
 """
 
+# app.py (baş taraf)
 from __future__ import annotations
-import os
+
+# --- import path fix: Cloud & local ---
+import sys, os, pathlib
+ROOT = pathlib.Path(__file__).resolve().parent           # /mount/src/cost-app
+for p in (ROOT, ROOT / "services", ROOT / "warehouses", ROOT / "admin"):
+    ps = str(p)
+    if ps not in sys.path:
+        sys.path.insert(0, ps)
+# --------------------------------------
+
 import streamlit as st
 from services.catalog import load as load_catalog
 from services.catalog_adapter import normalize_catalog
 from warehouses.generic import compute_generic
-
-# ensure project root is on sys.path (Cloud import fix)
-import os, sys
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # /mount/src/cost-app
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
 
 # -----------------------------------------------------------------------------
 # Page setup
