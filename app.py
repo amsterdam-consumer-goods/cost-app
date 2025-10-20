@@ -51,6 +51,8 @@ def _ensure_module(modname: str, filepath: pathlib.Path):
 # explicitly load the modules we import below
 _ensure_module("services.catalog", SERVICES_DIR / "catalog.py")
 _ensure_module("services.catalog_adapter", SERVICES_DIR / "catalog_adapter.py")
+_ensure_module("warehouses.final_calc", WAREHOUSES_DIR / "final_calc.py")
+_ensure_module("warehouses.second_leg", WAREHOUSES_DIR / "second_leg.py")
 _ensure_module("warehouses.generic", WAREHOUSES_DIR / "generic.py")
 # ------------------------------------------------------------------------------
 
