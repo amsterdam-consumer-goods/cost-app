@@ -4,22 +4,50 @@ Streamlit entrypoint for the VVP Calculator.
 - Sidebar has an Admin Login -> if correct, jump to Admin Panel
 """
 
-# app.py (baş taraf)
 from __future__ import annotations
 
-# --- import path fix: Cloud & local ---
-import sys, os, pathlib
-ROOT = pathlib.Path(__file__).resolve().parent           # /mount/src/cost-app
-for p in (ROOT, ROOT / "services", ROOT / "warehouses", ROOT / "admin"):
+# --- Force local 'services' package (avoid clash with 3rd-party 'services') ---
+import sys, os, pathlib, importlib.util
+
+ROOT = pathlib.Path(__file__).resolve().parent  # /mount/src/cost-app
+SERVICES_DIR = ROOT / "services"
+WAREHOUSES_DIR = ROOT / "warehouses"
+ADMIN_DIR = ROOT / "admin"
+
+# Put our project paths first
+for p in (ROOT, SERVICES_DIR, WAREHOUSES_DIR, ADMIN_DIR):
     ps = str(p)
     if ps not in sys.path:
         sys.path.insert(0, ps)
-# --------------------------------------
+
+# Explicitly register our local 'services' as the 'services' package
+if "services" not in sys.modules:
+    init_py = SERVICES_DIR / "__init__.py"
+    if init_py.exists():
+        spec = importlib.util.spec_from_file_location(
+            "services", str(init_py), submodule_search_locations=[str(SERVICES_DIR)]
+        )
+    else:
+        # namespace fallback
+        spec = importlib.util.spec_from_file_location(
+            "services", str(SERVICES_DIR), submodule_search_locations=[str(SERVICES_DIR)]
+        )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["services"] = mod
+    if spec.loader:  # type: ignore[attr-defined]
+        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+# ------------------------------------------------------------------------------
 
 import streamlit as st
 from services.catalog import load as load_catalog
 from services.catalog_adapter import normalize_catalog
 from warehouses.generic import compute_generic
+
+# ensure project root is on sys.path (Cloud import fix)
+import os, sys
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # /mount/src/cost-app
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 # -----------------------------------------------------------------------------
 # Page setup
