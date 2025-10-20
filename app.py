@@ -6,37 +6,41 @@ Streamlit entrypoint for the VVP Calculator.
 
 from __future__ import annotations
 
-# --- Force local 'services' package (avoid clash with 3rd-party 'services') ---
-import sys, os, pathlib, importlib.util
+# --- force-load local 'services' package & submodules (Cloud name clash fix) ---
+import sys, os, pathlib, types, importlib.util
 
-ROOT = pathlib.Path(__file__).resolve().parent  # /mount/src/cost-app
+ROOT = pathlib.Path(__file__).resolve().parent
 SERVICES_DIR = ROOT / "services"
 WAREHOUSES_DIR = ROOT / "warehouses"
 ADMIN_DIR = ROOT / "admin"
 
-# Put our project paths first
+# put our project paths first
 for p in (ROOT, SERVICES_DIR, WAREHOUSES_DIR, ADMIN_DIR):
     ps = str(p)
     if ps not in sys.path:
         sys.path.insert(0, ps)
 
-# Explicitly register our local 'services' as the 'services' package
+# register a dummy 'services' package pointing to our local folder
 if "services" not in sys.modules:
-    init_py = SERVICES_DIR / "__init__.py"
-    if init_py.exists():
-        spec = importlib.util.spec_from_file_location(
-            "services", str(init_py), submodule_search_locations=[str(SERVICES_DIR)]
-        )
-    else:
-        # namespace fallback
-        spec = importlib.util.spec_from_file_location(
-            "services", str(SERVICES_DIR), submodule_search_locations=[str(SERVICES_DIR)]
-        )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["services"] = mod
-    if spec.loader:  # type: ignore[attr-defined]
-        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    pkg = types.ModuleType("services")
+    pkg.__path__ = [str(SERVICES_DIR)]
+    sys.modules["services"] = pkg
+
+def _ensure_module(modname: str, filepath: pathlib.Path):
+    """Load a module from a file and register it in sys.modules as modname."""
+    if modname in sys.modules:
+        return
+    spec = importlib.util.spec_from_file_location(modname, str(filepath))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[modname] = module
+    assert spec and spec.loader
+    spec.loader.exec_module(module)  # type: ignore[attr-defined]
+
+# explicitly load the two submodules we import below
+_ensure_module("services.catalog", SERVICES_DIR / "catalog.py")
+_ensure_module("services.catalog_adapter", SERVICES_DIR / "catalog_adapter.py")
 # ------------------------------------------------------------------------------
+
 
 import streamlit as st
 from services.catalog import load as load_catalog
