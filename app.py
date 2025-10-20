@@ -1,58 +1,94 @@
 """
 Streamlit entrypoint for the VVP Calculator.
-
-Responsibilities:
-- Simple password gate (secrets/env). If no password configured, allow by default.
-- Two-step flow: Inputs → Details/Results.
-- Dispatch to per-warehouse calculators.
-
-Warehouse business logic lives in `warehouses/*.py`.
+- Main screen asks for USER password -> Calculator UI
+- Sidebar has an Admin Login -> if correct, jump to Admin Panel
 """
 
 from __future__ import annotations
-
 import os
 import streamlit as st
-
-from warehouses.de_offergeld import compute_de_offergeld
-from warehouses.fr_coquelle import compute_fr_coquelle
-from warehouses.nl_mentrex import compute_nl_mentrex
-from warehouses.nl_svz import compute_nl_svz
-from warehouses.ro_giurgiu import compute_ro_giurgiu
-from warehouses.sk_arufel import compute_sk_arufel
-from warehouses.es_decoexsa import compute_es_decoexsa
-
+from services.catalog import load as load_catalog
+from services.catalog_adapter import normalize_catalog
+from warehouses.generic import compute_generic
 
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# Page config 
+# Page setup
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="VVP Calculator", layout="wide")
+st.markdown("<style>.stImage img { border-radius: 0 !important; }</style>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# Auth 
+# Passwords
 # -----------------------------------------------------------------------------
+APP_PASSWORD = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD"))
 
+# -----------------------------------------------------------------------------
+# Admin login (sidebar) -> if ok, we render admin panel immediately
+# -----------------------------------------------------------------------------
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+# =============================
+# Admin Login + Admin Panel
+# =============================
+st.sidebar.markdown("### Admin Login")
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+# Login / Logout
+if not st.session_state.is_admin:
+    admin_pw = st.sidebar.text_input("Password", type="password", placeholder="••••••••", key="admin_pw")
+    if st.sidebar.button("Login", use_container_width=True, key="admin_login_btn"):
+        if ADMIN_PASSWORD and admin_pw == str(ADMIN_PASSWORD):
+            st.session_state.is_admin = True
+            st.sidebar.success("✅ Admin access granted")
+            st.rerun()
+        else:
+            st.sidebar.error("❌ Wrong password")
+else:
+    st.sidebar.success("🟢 Logged in as Admin")
+    if st.sidebar.button("Logout Admin", use_container_width=True, key="admin_logout_btn"):
+        st.session_state.is_admin = False
+        st.rerun()
+
+# Admin panel (tek seçimli menü: RADIO)
+if st.session_state.is_admin:
+    st.image("assets/logo2.png", width=190)
+    st.title("🛠️ Admin Panel")
+
+    # admin/app.py ile birebir aynı etiketler
+    choice = st.sidebar.radio(
+        "Admin Pages",
+        options=["Update warehouse", "Add warehouse", "Add customer"],
+        index=0,
+        key="admin_page_choice",
+    )
+
+    try:
+        from admin.views import admin_router
+        admin_router(choice)
+    except Exception as e:
+        st.error("Admin views are not available.")
+        st.caption(str(e))
+
+    st.stop()  # admin modunda calculator render edilmez
+
+# -----------------------------------------------------------------------------
+# USER password gate (main screen)
+# -----------------------------------------------------------------------------
 def check_password() -> bool:
-    """Return True if authenticated.
-
-    Order of precedence:
-      1) st.secrets["APP_PASSWORD"] (Streamlit Cloud)
-      2) os.environ["APP_PASSWORD"] (local/dev)
-
-    If neither is set, access is allowed (useful for local development).
-    """
-    secret_pw = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
-    if not secret_pw:  # no password configured
+    # If no user password set, let users in directly
+    if not APP_PASSWORD:
         return True
-
     if st.session_state.get("auth_ok"):
         return True
 
+    st.image("assets/logo2.png", width=190)
     st.title("🔐 Enter Password")
-    pw = st.text_input("Password", type="password", placeholder="Enter password…")
-    if st.button("Sign in"):
-        st.session_state.auth_ok = pw == str(secret_pw)
+    pw = st.text_input("Password", type="password", placeholder="Enter password…", key="user_pw_box")
+    if st.button("Sign in", key="user_signin_btn"):
+        st.session_state.auth_ok = pw == str(APP_PASSWORD)
         if not st.session_state.auth_ok:
             st.error("Incorrect password.")
         else:
@@ -62,20 +98,19 @@ def check_password() -> bool:
 if not check_password():
     st.stop()
 
-# Quick logout (top-right)
-right_col = st.columns([6, 1])[1]
-with right_col:
-    if st.button("Logout"):
+# -----------------------------------------------------------------------------
+# Calculator UI (for normal users)
+# -----------------------------------------------------------------------------
+st.image("assets/logo2.png", width=190)
+hdr_c, hdr_r = st.columns([6, 1])
+with hdr_c:
+    st.title("📦 VVP and Final Calculator")
+with hdr_r:
+    if st.button("Logout User"):
         st.session_state.pop("auth_ok", None)
         st.rerun()
+st.markdown("---")
 
-
-st.title("VVP Calculator")
-
-
-# -----------------------------------------------------------------------------
-# Session defaults
-# -----------------------------------------------------------------------------
 if "step" not in st.session_state:
     st.session_state.step = "inputs"
 
@@ -84,80 +119,98 @@ for key, default in {
     "buying_transport_cost": 0.0,
     "pieces": 1,
     "pallets": 1,
-    "weeks": 2,
-    "pallet_unit_cost": 0.0,  # € per pallet (optional)
+    "weeks": 4,
+    "pallet_unit_cost": 0.0,
 }.items():
     st.session_state.setdefault(key, default)
 
-
-WAREHOUSES: list[str] = [
-    "Netherlands / SVZ",
-    "Germany / Offergeld",
-    "Slovakia / Arufel",
-    "France / Coquelle",
-    "Romania / Giurgiu",
-    "Netherlands / Mentrex",
-    "Spain / Decoexsa"
-]
-
-
 def _dispatch(
-    warehouse: str,
+    warehouse_label: str,
     pieces: int,
     pallets: int,
     weeks: int,
     buying_transport_cost: float,
     pallet_unit_cost: float,
 ) -> None:
-    """Route to the selected warehouse calculator."""
-    if warehouse == "Netherlands / SVZ":
-        compute_nl_svz(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "Germany / Offergeld":
-        compute_de_offergeld(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "Slovakia / Arufel":
-        compute_sk_arufel(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "France / Coquelle":
-        compute_fr_coquelle(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "Romania / Giurgiu":
-        compute_ro_giurgiu(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "Netherlands / Mentrex":
-        compute_nl_mentrex(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    elif warehouse == "Spain / Decoexsa":
-        compute_es_decoexsa(pieces, pallets, weeks, buying_transport_cost, pallet_unit_cost)
-    else:
-        st.info("This warehouse’s specific rules are not implemented yet.")
+    catalog = normalize_catalog(load_catalog())
+    whs = catalog.get("warehouses", []) or []
+    label_map = {}
+    for w in whs:
+        country = (w.get("country") or "").strip()
+        name = (w.get("name") or w.get("id") or "Warehouse").strip()
+        lbl = f"{country} / {name}" if country else name
+        label_map[lbl] = w
 
+    selected_wh = label_map.get(warehouse_label)
+    if not selected_wh:
+        rhs = warehouse_label.split("/", 1)[-1].strip().lower()
+        for lbl, w in label_map.items():
+            name = str(w.get("name", "")).strip().lower()
+            lbl_rhs = lbl.split("/", 1)[-1].strip().lower()
+            if (
+                name == rhs
+                or lbl_rhs == rhs
+                or name.startswith(rhs)
+                or rhs.startswith(name)
+                or rhs in name
+                or name in rhs
+            ):
+                selected_wh = w
+                break
 
-# -----------------------------------------------------------------------------
-# Step 1 — Inputs
-# -----------------------------------------------------------------------------
+    if not selected_wh:
+        st.error(
+            "Selected warehouse not found in catalog.json.\n\n"
+            "• Check if it's defined as 'Country / Name' in Admin.\n"
+            "• Or select a valid warehouse from the list."
+        )
+        return
+
+    id_map = {w.get("id"): w for w in whs if w.get("id")}
+    compute_generic(
+        wh=selected_wh,
+        all_whs_map=id_map,
+        pieces=pieces,
+        pallets=pallets,
+        weeks=weeks,
+        buying_transport_cost=buying_transport_cost,
+        pallet_unit_cost=pallet_unit_cost,
+    )
+
+if st.button("🔄 Refresh warehouses list"):
+    st.rerun()
+
 if st.session_state.step == "inputs":
+    catalog = normalize_catalog(load_catalog())
+    whs = catalog.get("warehouses", []) or []
+    WAREHOUSE_OPTIONS = []
+    for w in whs:
+        country = (w.get("country") or "").strip()
+        name = (w.get("name") or w.get("id") or "Warehouse").strip()
+        label = f"{country} / {name}" if country else name
+        WAREHOUSE_OPTIONS.append(label)
+
     warehouse = st.selectbox(
         "Select Warehouse",
-        ["-- Select a warehouse --"] + WAREHOUSES,
-        index=(
-            (["-- Select a warehouse --"] + WAREHOUSES).index(st.session_state.warehouse)
-            if st.session_state.warehouse in ["-- Select a warehouse --"] + WAREHOUSES
-            else 0
-        ),
+        ["-- Select a warehouse --"] + WAREHOUSE_OPTIONS,
+        index=(["-- Select a warehouse --"] + WAREHOUSE_OPTIONS).index(st.session_state.warehouse)
+        if st.session_state.warehouse in ["-- Select a warehouse --"] + WAREHOUSE_OPTIONS
+        else 0,
     )
 
     st.subheader("Order Inputs")
-
     with st.form("order_form", clear_on_submit=False):
         c1, c2, c3, c4 = st.columns(4)
-
         with c1:
-            st.markdown("Buying Transport Cost (€ total)")
+            st.markdown("Incoming Transport Cost (€ total)")
             buying_transport_cost = st.number_input(
-                "Buying Transport Cost (€ total)",
+                "Incoming Transport Cost (€ total)",
                 min_value=0.0,
                 step=1.0,
                 value=float(st.session_state.buying_transport_cost),
                 format="%.2f",
                 label_visibility="collapsed",
             )
-
         with c2:
             st.markdown("Pieces (#) *")
             pieces = st.number_input(
@@ -168,7 +221,6 @@ if st.session_state.step == "inputs":
                 format="%d",
                 label_visibility="collapsed",
             )
-
         with c3:
             st.markdown("Pallets (#) *")
             pallets = st.number_input(
@@ -186,38 +238,32 @@ if st.session_state.step == "inputs":
                 value=float(st.session_state.pallet_unit_cost),
                 format="%.2f",
             )
-
         with c4:
-            st.markdown("Weeks in Storage (min 2) *")
+            st.markdown("Weeks in Storage (min 4) *")
             weeks = st.number_input(
                 "Weeks in Storage",
-                min_value=2,
+                min_value=4,
                 step=1,
-                value=int(max(2, st.session_state.weeks)),
+                value=int(max(4, st.session_state.weeks)),
                 format="%d",
                 label_visibility="collapsed",
             )
-
         next_clicked = st.form_submit_button("Next →", type="primary")
 
     if next_clicked:
         if warehouse == "-- Select a warehouse --":
             st.warning("Please select a warehouse to continue.")
             st.stop()
-
         if pallets > 66:
             st.error("Pallets cannot exceed 66.")
             st.stop()
-
-        if weeks < 2:
-            st.error("You need to order at least 2 weeks of storage.")
+        if weeks < 4:
+            st.error("You need to order at least 4 weeks of storage.")
             st.stop()
-
         if any(v is None or v <= 0 for v in [pieces, pallets, weeks]):
             st.warning("Fields marked with * are required and must be > 0.")
             st.stop()
 
-        # Persist to session and go to Step 2
         st.session_state.warehouse = warehouse
         st.session_state.buying_transport_cost = float(buying_transport_cost)
         st.session_state.pieces = int(pieces)
@@ -226,15 +272,22 @@ if st.session_state.step == "inputs":
         st.session_state.pallet_unit_cost = float(pallet_unit_cost)
         st.session_state.step = "details"
         st.rerun()
-
-# -----------------------------------------------------------------------------
-# Step 2 — Details / Results
-# -----------------------------------------------------------------------------
 else:
+    catalog = normalize_catalog(load_catalog())
+    whs = catalog.get("warehouses", []) or []
+    WAREHOUSE_OPTIONS = []
+    for w in whs:
+        country = (w.get("country") or "").strip()
+        name = (w.get("name") or w.get("id") or "Warehouse").strip()
+        label = f"{country} / {name}" if country else name
+        WAREHOUSE_OPTIONS.append(label)
+
     st.selectbox(
         "Warehouse (locked, change via Back)",
-        ["-- Select a warehouse --"] + WAREHOUSES,
-        index=(["-- Select a warehouse --"] + WAREHOUSES).index(st.session_state.warehouse),
+        ["-- Select a warehouse --"] + WAREHOUSE_OPTIONS,
+        index=(["-- Select a warehouse --"] + WAREHOUSE_OPTIONS).index(st.session_state.warehouse)
+        if st.session_state.warehouse in ["-- Select a warehouse --"] + WAREHOUSE_OPTIONS
+        else 0,
         disabled=True,
     )
 
@@ -242,11 +295,10 @@ else:
         st.session_state.step = "inputs"
         st.rerun()
 
-    # Read-only recap of inputs
     st.markdown("### Order Summary")
     s1, s2, s3, s4 = st.columns(4)
     with s1:
-        st.metric("Buying Transport Cost (€)", f"{st.session_state.buying_transport_cost:.2f}")
+        st.metric("Incoming Transport Cost (€)", f"{st.session_state.buying_transport_cost:.2f}")
     with s2:
         st.metric("Pieces (#)", f"{st.session_state.pieces}")
     with s3:
@@ -255,10 +307,8 @@ else:
             st.caption(f"€/pallet: {st.session_state.pallet_unit_cost:.2f}")
     with s4:
         st.metric("Weeks in Storage", f"{st.session_state.weeks}")
-
     st.markdown("---")
 
-    # Run the warehouse-specific calculator
     _dispatch(
         st.session_state.warehouse,
         st.session_state.pieces,
