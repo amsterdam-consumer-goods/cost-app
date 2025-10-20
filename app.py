@@ -26,6 +26,18 @@ if "services" not in sys.modules:
     pkg.__path__ = [str(SERVICES_DIR)]
     sys.modules["services"] = pkg
 
+# register a dummy 'warehouses' package pointing to our local folder
+if "warehouses" not in sys.modules:
+    pkg_wh = types.ModuleType("warehouses")
+    pkg_wh.__path__ = [str(WAREHOUSES_DIR)]
+    sys.modules["warehouses"] = pkg_wh
+
+# register a dummy 'admin' package pointing to our local folder
+if "admin" not in sys.modules:
+    pkg_admin = types.ModuleType("admin")
+    pkg_admin.__path__ = [str(ADMIN_DIR)]
+    sys.modules["admin"] = pkg_admin
+
 def _ensure_module(modname: str, filepath: pathlib.Path):
     """Load a module from a file and register it in sys.modules as modname."""
     if modname in sys.modules:
@@ -36,9 +48,10 @@ def _ensure_module(modname: str, filepath: pathlib.Path):
     assert spec and spec.loader
     spec.loader.exec_module(module)  # type: ignore[attr-defined]
 
-# explicitly load the two submodules we import below
+# explicitly load the modules we import below
 _ensure_module("services.catalog", SERVICES_DIR / "catalog.py")
 _ensure_module("services.catalog_adapter", SERVICES_DIR / "catalog_adapter.py")
+_ensure_module("warehouses.generic", WAREHOUSES_DIR / "generic.py")
 # ------------------------------------------------------------------------------
 
 
@@ -46,12 +59,6 @@ import streamlit as st
 from services.catalog import load as load_catalog
 from services.catalog_adapter import normalize_catalog
 from warehouses.generic import compute_generic
-
-# ensure project root is on sys.path (Cloud import fix)
-import os, sys
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # /mount/src/cost-app
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
 
 # -----------------------------------------------------------------------------
 # Page setup
