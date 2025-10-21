@@ -2,10 +2,20 @@
 from typing import List
 import streamlit as st
 import sys
+import importlib.util
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from services.config_manager import load_catalog, save_catalog, add_customer as cm_add_customer
+# Manually load config_manager module
+_root = Path(__file__).resolve().parents[2]
+_cm_path = _root / "services" / "config_manager.py"
+_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
+_cm = importlib.util.module_from_spec(_spec)
+sys.modules["services.config_manager"] = _cm
+_spec.loader.exec_module(_cm)
+
+load_catalog = _cm.load_catalog
+save_catalog = _cm.save_catalog
+cm_add_customer = _cm.add_customer
 
 def page_add_customer():
     st.title("Admin • Add Customer")
@@ -33,7 +43,7 @@ def page_add_customer():
             st.error("Please enter at least one address line.")
             return
 
-        cid, _cust = cm_add_customer(catalog, name.strip(), addresses_clean)
+        catalog, cid = cm_add_customer(catalog, {"name": name.strip(), "addresses": addresses_clean})
         save_catalog(catalog)
         st.success(f"Customer created with ID: {cid}")
         st.rerun()
