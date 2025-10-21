@@ -88,7 +88,7 @@ if st.session_state.is_admin:
         admin_router(choice)
     except Exception as e:
         st.error("Admin views are not available.")
-        st.caption(str(e))
+        st.exception(e)  # Tam traceback'i gösterir
 
     st.stop()  # admin modunda calculator render edilmez
 
