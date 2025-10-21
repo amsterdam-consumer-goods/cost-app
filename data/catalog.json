@@ -1,0 +1,975 @@
+{
+  "warehouses": [
+    {
+      "id": "nl_svz",
+      "name": "SVZ NL",
+      "rates": {
+        "inbound": 2.59,
+        "outbound": 2.36,
+        "storage": 1.36,
+        "order_fee": 0.0
+      },
+      "features": {
+        "labeling": true,
+        "transfer": true,
+        "second_leg": true,
+        "label_costs": {
+          "label": 0.015,
+          "labelling": 0.045
+        },
+        "transfer_mode": "excel",
+        "transfer_excel": "data/transfer_rates_nl_svz.json",
+        "double_stack": true
+      }
+    },
+    {
+      "id": "de_offergeld",
+      "name": "Offergeld DE",
+      "rates": {
+        "inbound": 3.9,
+        "outbound": 3.12,
+        "storage": 1.4,
+        "order_fee": 0.0
+      },
+      "features": {
+        "labeling": true,
+        "transfer": false,
+        "second_leg": true,
+        "label_costs": {
+          "label": 0.01,
+          "labelling": 0.035
+        }
+      }
+    },
+    {
+      "id": "es_decoexsa",
+      "name": "Decoexsa ES",
+      "rates": {
+        "inbound": 2.9,
+        "outbound": 2.9,
+        "storage": 1.26,
+        "order_fee": 42.0
+      },
+      "features": {
+        "labeling": false,
+        "transfer": false,
+        "second_leg": true
+      }
+    },
+    {
+      "id": "fr_coquelle",
+      "name": "Coquelle FR",
+      "rates": {
+        "inbound": 5.18,
+        "outbound": 5.4,
+        "storage": 4.0,
+        "order_fee": 0.0
+      },
+      "features": {
+        "labeling": false,
+        "transfer": false,
+        "second_leg": true
+      }
+    },
+    {
+      "id": "nl_mentrex",
+      "name": "Mentrex NL",
+      "rates": {
+        "inbound": 5.1,
+        "outbound": 5.1,
+        "storage": 1.4,
+        "order_fee": 50.0
+      },
+      "features": {
+        "labeling": false,
+        "transfer": false,
+        "second_leg": true
+      }
+    },
+    {
+      "id": "ro_giurgiu",
+      "name": "Giurgiu RO",
+      "rates": {
+        "inbound": 2.3,
+        "outbound": 2.3,
+        "storage": 1.4,
+        "order_fee": 0.0
+      },
+      "features": {
+        "labeling": true,
+        "transfer": false,
+        "second_leg": true,
+        "label_costs": {
+          "label": 0.015,
+          "labelling": 0.033
+        }
+      }
+    },
+    {
+      "id": "sk_arufel",
+      "name": "Arufel SK",
+      "rates": {
+        "inbound": 0.0,
+        "outbound": 0.0,
+        "storage": 0.0,
+        "order_fee": 360.0
+      },
+      "features": {
+        "labeling": true,
+        "transfer": false,
+        "second_leg": true,
+        "label_costs": {
+          "label": 0.0,
+          "labelling": 0.03
+        }
+      }
+    },
+    {
+      "id": "id_logistics_nl",
+      "name": "ID Logistics NL",
+      "rates": {
+        "inbound": 3.3,
+        "outbound": 3.07,
+        "storage": 1.51,
+        "order_fee": 5.49
+      },
+      "features": {
+        "labeling": false,
+        "transfer": false,
+        "second_leg": true
+      }
+    },
+    {
+      "id": "decoexsa_fr",
+      "name": "Decoexsa FR",
+      "rates": {
+        "inbound": 2.9,
+        "outbound": 2.9,
+        "storage": 1.26,
+        "order_fee": 42.0
+      },
+      "features": {
+        "labeling": false,
+        "transfer": false,
+        "second_leg": false
+      }
+    }
+  ],
+  "customers": [
+    {
+      "name": "ABSO EXPORT SL",
+      "addresses": [
+        "5 CALLE GUILLERMO STEWART HOWIE, ALICANTE 03006, Spanje"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V.",
+      "addresses": [
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK",
+        "Rheastraat 10, 5047 TL  TILBURG"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. DE",
+      "addresses": [
+        "Rheastraat 10, 5047 TL  TILBURG",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. ES",
+      "addresses": [
+        "Avenida Del Teide, Plot 2A, Los Pradillos II, Montepino Indu, ILLESCAS (TOLEDO) 45200, Spanje",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. FR",
+      "addresses": [
+        "Rheastraat 10, 5047 TL  TILBURG",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. IT",
+      "addresses": [
+        "Rheastraat 10, 5047 TL  TILBURG",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. PL",
+      "addresses": [
+        "Rheastraat 10, 5047 TL  TILBURG",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ACTION SERVICE & DISTRIBUTIE B.V. SK",
+      "addresses": [
+        "Rheastraat 10, 5047 TL  TILBURG",
+        "Perenmarkt 15, 1681 PG  ZWAAGDIJK-OOST"
+      ]
+    },
+    {
+      "name": "ADVION B.V.",
+      "addresses": [
+        "Slego 1 A, 1046 BM  AMSTERDAM"
+      ]
+    },
+    {
+      "name": "ALIFOODS S.A.",
+      "addresses": [
+        "5 ARTES GRAFICAS, ALICANTE 03008, Spanje"
+      ]
+    },
+    {
+      "name": "AMSTERDAM CONSUMER GOODS B.V.",
+      "addresses": [
+        "Singel 272-1, 1016 AC  AMSTERDAM"
+      ]
+    },
+    {
+      "name": "AMSTERDAM CONSUMER GOODS B.V. - DE",
+      "addresses": [
+        "Beulingstraat 8, 1017 BA  AMSTERDAM"
+      ]
+    },
+    {
+      "name": "APPROSTOCK",
+      "addresses": [
+        "93 rue du général de Gaulle, 62840   LAVENTIE, Frankrijk"
+      ]
+    },
+    {
+      "name": "ASTOR HELLAS S.A.",
+      "addresses": [
+        "Marinou Antipa 19, PYLAIA - THESSALONIKI 57001, Griekenland"
+      ]
+    },
+    {
+      "name": "ASTUTE HEALTHCARE LIMITED",
+      "addresses": [
+        "CADWELL LANE, BILTON ROAD, UNIT 1, HITCHIN SG4 0SB, Groot-Brittannië",
+        "Brick Knoll Park, Ashley Road 2 B, ST. ALBANS 5UG, Groot-Brittannië"
+      ]
+    },
+    {
+      "name": "AUCHAN HYPERMARCHE SAS",
+      "addresses": [
+        "288 Rue du Chemin Vert, 59273  FRETIN, Frankrijk",
+        "200 rue de Poulainville, 80084  AMIENS, Frankrijk",
+        "4 Avenue Bernard de Jussieu, 77700   SERRIS, Frankrijk",
+        "GREEN WAY STREET, 59273   FRETIN, Frankrijk",
+        "1608 avenue Joliot Curie, 30904  NIMES, Frankrijk"
+      ]
+    },
+    {
+      "name": "B&M FRANCE SAS",
+      "addresses": [
+        "8 Rue du Bois Joli, BP80025, 63801  COURNON-D'AUVERGNE, Frankrijk",
+        "8 Rue Du Bois Joli CELLULE C, 63801  COURNON D'AUVERGNE, Frankrijk"
+      ]
+    },
+    {
+      "name": "B4B TRADE",
+      "addresses": [
+        "18 Avenue Clemenceau, 68100  MULHOUSE, Frankrijk"
+      ]
+    },
+    {
+      "name": "BELANTRA BV",
+      "addresses": [
+        "Bist 19, 2630  AARTSELAAR, België"
+      ]
+    },
+    {
+      "name": "BIG BAZAR B.V",
+      "addresses": [
+        "Poppenbouwing 30, 4191 NZ  GELDERMALSEN"
+      ]
+    },
+    {
+      "name": "BONI MARKTEN BV",
+      "addresses": [
+        "Edisonstraat 2, 3861 NE  NIJKERK GLD",
+        "Edisonstraat 2 BONI DC-1 KW-fast, 3861 NE  NIJKERK GLD"
+      ]
+    },
+    {
+      "name": "BOON FOOD GROUP BV",
+      "addresses": [
+        "Saffier 300, 3316 LN  DORDRECHT"
+      ]
+    },
+    {
+      "name": "BRANDS ONLY",
+      "addresses": [
+        "BRUNINIEKU 22-11, RIGA 1001, Letland"
+      ]
+    },
+    {
+      "name": "BUTLON B.V.",
+      "addresses": [
+        "Jaargetijdenweg 49, 7532 SX  ENSCHEDE"
+      ]
+    },
+    {
+      "name": "CALCAR d.o.o.",
+      "addresses": [
+        "8 ULICA LAZNICE, DUGO SELO 10370, Kroatië"
+      ]
+    },
+    {
+      "name": "CARREFOUR BELGIUM",
+      "addresses": [
+        "Konrad Adenauerlaan 5, 1850  GRIMBERGEN, België"
+      ]
+    },
+    {
+      "name": "CARREFOUR EUROPE TRADING SAS [ES]",
+      "addresses": [
+        "93 AVENUE DE PARIS, 91300  MASSY, Frankrijk",
+        "2 Pgno Ind Miralcampo, AVDA. DE LA CONSTRUCCION, Guadalajara, AZUQUECA DE HENARES 1919200, Spanje"
+      ]
+    },
+    {
+      "name": "CARREFOUR EUROPE TRADING [FD]",
+      "addresses": [
+        "ZAC du Mitra - Rue Falcon, 30800  SAINT GILLES, Frankrijk",
+        "3 Rue du Marchis ZID de l’Omois BP 30, 02400  EPAUX-BEZU, Frankrijk",
+        "1 Rue Jean Pierre Ageneau, 49300  CHOLET, Frankrijk",
+        "17 Route Nationale, 80700  ROYE, Frankrijk"
+      ]
+    },
+    {
+      "name": "CASH LUPO S.L.",
+      "addresses": [
+        "5 Plaza de la Region Murciana, MOLINA DE SEGURA 30500, Spanje"
+      ]
+    },
+    {
+      "name": "COOPERATIVE U ENSEIGNE EST",
+      "addresses": [
+        "1 SV2 Entrepôts Système U Est Rue de l'Europe ZI des Foulettière, 25410  SAINT VIT, Frankrijk",
+        "38 avenue de l'Arcalod, 74152   RUMILLY, Frankrijk",
+        "115 rue Marc Seguin, 68200  MULHOUSE, Frankrijk"
+      ]
+    },
+    {
+      "name": "COOPERATIVE U ENSEIGNE NORD",
+      "addresses": [
+        "campagne du rang mare, 27810  BEUZEVILLE, Frankrijk",
+        "COOPERATIVE U LOGISTIQUE Campagne du Rang Mare, 27210  BEUZEVILLE, Frankrijk"
+      ]
+    },
+    {
+      "name": "COOPERATIVE U ENSEIGNE OUEST",
+      "addresses": [
+        "16 RUE VEGA, Z.A. L HUATE FORET, 44470  CARQUEFOU, Frankrijk",
+        "8 rue Dieudonné Coste, Saint Aignan de Grand Lieu, 44860   NANTES, Frankrijk",
+        "45 Boulevard Charles de Gaulle, 49800   TRELAZE, Frankrijk",
+        "Rue Jean Watt, 79230   PRAHECQ, Frankrijk",
+        "10 Allée du Pré Rio, 22440  PLOUFRAGAN, Frankrijk",
+        "1 ZI ANTARES PLACE DES PLEIADES, 44470  CARQUEFOU, Frankrijk"
+      ]
+    },
+    {
+      "name": "CORA S.A.",
+      "addresses": [
+        "Rue de Capilône 10, 6220  HEPPIGNIES, België"
+      ]
+    },
+    {
+      "name": "CREED SUPPLIES BV",
+      "addresses": [
+        "Herengracht 449-A, 1017 BR  AMSTERDAM"
+      ]
+    },
+    {
+      "name": "Carrefour Europe Trading SAS [BE]",
+      "addresses": [
+        "Neerveld 1, 2550  KONTICH, België",
+        "Konrad Adenauerlaan 5, 1850  GRIMBERGEN, België"
+      ]
+    },
+    {
+      "name": "Carrefour Europe Trading SAS [FR]",
+      "addresses": [
+        "93 AVENUE DE PARIS, 91300  MASSY, Frankrijk",
+        "3 Rue du Marchis, 02400   EPAUX-BEZU, Frankrijk",
+        "ZAC du Mitra - Rue Falcon, 30800  SAINT GILLES, Frankrijk",
+        "1 Rue Jean Pierre Ageneau, 49300  CHOLET, Frankrijk",
+        "82 RD FM Logistic Route de Gournay RD82, 60490  RESSONS-SUR-MATZ, Frankrijk",
+        "Zone Intêret Départemental de l'Omois, 02400  EPAUX BEZU, Frankrijk",
+        "17 Route Nationale, 80700  ROYE, Frankrijk",
+        "3 Rue du Marchis ZID de l’Omois BP 30, 02400  EPAUX-BEZU, Frankrijk",
+        "Overschiestraat 186 D, 1062 XK  AMSTERDAM"
+      ]
+    },
+    {
+      "name": "Carrefour Europe Trading SAS [NL]",
+      "addresses": [
+        "Kaapstadweg 50, 1047 HG  AMSTERDAM",
+        "Overschiestraat 186 D, 1062 XK  AMSTERDAM",
+        "Neerveld 1, 2550  KONTICH, België"
+      ]
+    },
+    {
+      "name": "DAQSO INTERNATIONAL B.V.",
+      "addresses": [
+        "Edison 51, 3241 LS  MIDDELHARNIS"
+      ]
+    },
+    {
+      "name": "DE BOER TRANSPORT BEEMSTER VOF",
+      "addresses": [
+        "Zuiddijk 12, 1483 MA  DE RIJP"
+      ]
+    },
+    {
+      "name": "DE VIJZEL TRADING BV",
+      "addresses": [
+        "Drentse Poort 27, 9521 JA  NIEUW BUINEN"
+      ]
+    },
+    {
+      "name": "DEALDONKEY",
+      "addresses": [
+        "Haverstraat 31, 2152 GB  NIEUW VENNEP"
+      ]
+    },
+    {
+      "name": "DEKA SUPERMARKTEN BV",
+      "addresses": [
+        "Olieweg 6, 1951 NH  VELSEN-NOORD",
+        "Basisweg 7, 1951 NG  VELSEN-NOORD"
+      ]
+    },
+    {
+      "name": "DELINI INTERNATIONAL SP ZOO",
+      "addresses": [
+        "UL GLOGOWSKA 82/ 22, POZNAN 60-741, Polen"
+      ]
+    },
+    {
+      "name": "DENNER AG",
+      "addresses": [
+        "89 Langfeldstrasse, 8500  FRAUENFELD, Zwitserland",
+        "3 Steiacherstrasse, 5506  MÄGENWIL, Zwitserland",
+        "47 Bahnhofstrasse, 3185  SCHMITTEN, Zwitserland"
+      ]
+    },
+    {
+      "name": "DETAILCONSULT GROEP B.V.",
+      "addresses": [
+        "Flemingweg 1, 2408 AV  ALPHEN AAN DEN RIJN",
+        "Hollandweg 32, 2665 MT  BLEISWIJK",
+        "Klappolder 55, 2665 LP  BLEISWIJK",
+        "Edisonstraat 11, 2171 TV  SASSENHEIM",
+        "Hollandweg 30, 2665 MT  BLEISWIJK"
+      ]
+    },
+    {
+      "name": "DI SA",
+      "addresses": [
+        "RESEARCHDREEF 15, 1070  BRUSSEL (ANDERLECHT), België"
+      ]
+    },
+    {
+      "name": "DIE GRENZE",
+      "addresses": [
+        "Gunnerstraat 14 A, 7595 KE  WEERSELO",
+        "De Westerd 18, 9321 AK  PEIZE"
+      ]
+    },
+    {
+      "name": "DIRK ROSSMANN GmbH GLN_4305615000008",
+      "addresses": [
+        "INSERHAEGENER STRASSE 16 GLN 4305615000008, 30938  BURGWEDEL, Duitsland",
+        "Duisburger Str. 10, 14641  BERLIN/WUSTERMARK, Duitsland",
+        "Münchener Straße 4, 06796  SANDERSDORF-BREHNA, Duitsland",
+        "Lilienthalstraße 12, 68642  BÜRSTADT, Duitsland",
+        "Emdener Str 10, 50735  KÖLN, Duitsland",
+        "Am Berkhopsfeld 4, 30938  BURGWEDEL, Duitsland",
+        "Am Ihlberg 2-4, 24109   KIEL-MELSDORF, Duitsland",
+        "Am Hebelbach 2, 34323   MALSFELD, Duitsland",
+        "Gadastr 25 F, 85232   BERGKIRCHEN, Duitsland",
+        "Warm Berkhopsfeld 4, 30938   BURGWEDEL, Duitsland"
+      ]
+    },
+    {
+      "name": "DISTRIBUTION CASINO FRANCE",
+      "addresses": [
+        "137 Lapra, 42330  SAINT-BONNET-LES-OULES, Frankrijk"
+      ]
+    },
+    {
+      "name": "DISTRILOGISTIQUE",
+      "addresses": [
+        "Blokkestraat 57, 8550  ZWEVEGEM, België"
+      ]
+    },
+    {
+      "name": "DOLLARSTORE AB",
+      "addresses": [
+        "2 Paketvägen, ÖREBRO 70236, Zweden"
+      ]
+    },
+    {
+      "name": "EURO-SOAP NV",
+      "addresses": [
+        "Sprietestraat 166, 8792  DESSELGEM, België"
+      ]
+    },
+    {
+      "name": "FALCON GALLANT SL",
+      "addresses": [
+        "52 CALLE NUNEZ DE BALBOA, MADRID 28001, Spanje"
+      ]
+    },
+    {
+      "name": "FFSA",
+      "addresses": [
+        "30 Rue maryse Bastié, 34174  CASTELNEAU-LE-LEZ, Frankrijk",
+        "1 BAT LD1, VOIE DE LA MOTTE, 62119  DOURGES, Frankrijk"
+      ]
+    },
+    {
+      "name": "FOOD BROKERS B.V.",
+      "addresses": [
+        "Toepadweg 12, 5301 KA  ZALTBOMMEL"
+      ]
+    },
+    {
+      "name": "GLOBAL TRADING B.V.",
+      "addresses": [
+        "Turfpoortstraat 66, 1411 EH  NAARDEN"
+      ]
+    },
+    {
+      "name": "IMD BRAND S.R.O.",
+      "addresses": [
+        "13 Tubrinova, BRATISLAVA 3 83104, Slowakije"
+      ]
+    },
+    {
+      "name": "IMPERIAS GMBH",
+      "addresses": [
+        "12 A Eichbergstraße, A-4470  ENNS, Oostenrijk",
+        "2 D Freindorferstr, A-4052  ANSFELDEN, Oostenrijk"
+      ]
+    },
+    {
+      "name": "INTERTRADE SP. Z.O.O.",
+      "addresses": [
+        "Ulica Tyniecka 227, KRAKOW 30376, Polen"
+      ]
+    },
+    {
+      "name": "ITM ALIMENTAIRE BELGIUM",
+      "addresses": [
+        "RUE DU COLOMBIER 9, 6041  GOSSELIES, België"
+      ]
+    },
+    {
+      "name": "ITM ALIMENTAIRE INT, ETB SIEGE SOCIAL [FD]",
+      "addresses": [
+        "57 AC Chanteloup, 2000RD, 77550  MOISSY-CRAMAYEL, Frankrijk"
+      ]
+    },
+    {
+      "name": "ITM ALIMENTAIRE INTERNATIONAL, ETB SIEGE SOCIAL",
+      "addresses": [
+        "57 AC Chanteloup, 2000 RD, 77550  MOISSY-CRAMAYEL, Frankrijk",
+        "3 RUE DES ATRÉBATES, 62210  AVION, Frankrijk",
+        "ID LOGISTICS, AVENUE MAGELLAN, 13140  MIRAMAS, Frankrijk",
+        "2 RUE DES CHAPELLES, 38070  SAINT-QUENTIN-FALLAVIER, Frankrijk",
+        "LIEU DIT IMBERTI, 82710  BRESSOLS, Frankrijk",
+        "24 RUE Auguste Chabrières, 75015  PARIS, Frankrijk",
+        "PARC D'ACTIVITES LA HUPERIE, 35500  ERBREE, Frankrijk",
+        "390 AVENUE ANNA LINDH, 77240  VERT-SAINT-DENIS, Frankrijk"
+      ]
+    },
+    {
+      "name": "J.A. WOLLS-HANDELS GMBH",
+      "addresses": [
+        "AM HORNBERG 6, 29614  SOLTAU, Duitsland"
+      ]
+    },
+    {
+      "name": "J.W. INTERNET SALES B.V.",
+      "addresses": [
+        "Hongkongstraat 82, 3047 BS  ROTTERDAM"
+      ]
+    },
+    {
+      "name": "KOIF B.V.",
+      "addresses": [
+        "VLAMSTRAAT 7/8, 9450  DENDERHOUTEM, België",
+        "Terbekehofdreef 51 B, 2610  WILRIJK, België"
+      ]
+    },
+    {
+      "name": "KUIPERS LOGISTICS B.V,",
+      "addresses": [
+        "Münsterstraat 18, 7575 ED  OLDENZAAL"
+      ]
+    },
+    {
+      "name": "LIDL NEDERLAND GMBH",
+      "addresses": [
+        "Warandebergstraat 20, 1271 ZC  HUIZEN"
+      ]
+    },
+    {
+      "name": "MATCH FRANCE",
+      "addresses": [
+        "19 avenue de la Rotonde, 59160  LOMME, Frankrijk"
+      ]
+    },
+    {
+      "name": "MDP HOLDING JSC",
+      "addresses": [
+        "VERKIUM 31-A, VILNIUS LT09108, Litouwen"
+      ]
+    },
+    {
+      "name": "MERCADONA SA",
+      "addresses": [
+        "5 CALLE VALENCIA, TABERNES BLANQUES (VALENCIA) 46016, Spanje",
+        "1117 SANT ESTEVE REGULADOR SECOS, AVDA. DE SALVADOR DALÍ S/N, SANT ESTEVE 8635, Spanje"
+      ]
+    },
+    {
+      "name": "NAVIGATOR M. PILACINSKI S.K.",
+      "addresses": [
+        "UL. ANNOPOL 3, WARSAW - MAZOWIECKIE 03-236, Polen"
+      ]
+    },
+    {
+      "name": "NETTORAMA",
+      "addresses": [
+        "Wilhelminakanaal Zuid 120, 4903 RA  OOSTERHOUT NB",
+        "Florijnstraat 7, 4903 RM  OOSTERHOUT NB",
+        "Tussenriemer 7, 4704 RT  ROOSENDAAL",
+        "Elftweg 5, 4941 VR  RAAMSDONKSVEER"
+      ]
+    },
+    {
+      "name": "NICEEY BV",
+      "addresses": [
+        "Denariusstraat 15, 4903 RC  OOSTERHOUT NB"
+      ]
+    },
+    {
+      "name": "NM AGORABRANDS DISTRIBUTION LTD",
+      "addresses": [
+        "NIKI COURT, FLOOR 4, 34 NIKOU PATTICHI, LIMASOL 3071, Cyprus"
+      ]
+    },
+    {
+      "name": "NORMA SARL",
+      "addresses": [
+        "1 RUE PORTE DES VOSGES, 57400  SARREBOURG, Frankrijk"
+      ]
+    },
+    {
+      "name": "NORMAL A/S",
+      "addresses": [
+        "41 GODTHABSVEJ, 8660  SKANDERBORG, Denemarken",
+        "36 DK8002 KILDERPARKEN, 8722  HEDENSTED, Denemarken",
+        "15 Egeskovvej, 8700  HORSENS, Denemarken"
+      ]
+    },
+    {
+      "name": "NTL INTERNATIONAL LTD",
+      "addresses": [
+        "JOHNSON STREET, SOUTHALL 142 UNIT 10, MIDDLESEX  UB2 5FD, Groot-Brittannië"
+      ]
+    },
+    {
+      "name": "NV COLRUYT FOOD RETAIL",
+      "addresses": [
+        "Edingensesteenweg 196, 1500  HALLE, België",
+        "Distriwaas NV, Europark Zuid 6 B, 9100  SINT-NIKLAAS, België",
+        "Rue du parc Industriel 34, 7822  GHISLENGHIEN, België",
+        "RUE VERTE LOUCHE 1, 7866  OLLIGNIES, België",
+        "Bilkensveldweg 2, 1500  HALLE, België"
+      ]
+    },
+    {
+      "name": "OTTO'S AG",
+      "addresses": [
+        "3 Wassermatte, 6210  SURSEE, Zwitserland"
+      ]
+    },
+    {
+      "name": "PC TANK SARL",
+      "addresses": [
+        "Rue de l’Industrie 7, FOETZ 3895, Luxemburg"
+      ]
+    },
+    {
+      "name": "PLATE FORME CORA LUDRES",
+      "addresses": [
+        "300 Rue Gustave Eiffel, 54710  LUDRES, Frankrijk",
+        "70819 TSA, 02T, 62971  ARRAS CEDEX 9, Frankrijk"
+      ]
+    },
+    {
+      "name": "PLATE FORME CORA ROYE NATIONALE",
+      "addresses": [
+        "17 Route Nationale, Zone Industrielle Sud, 80700  ROYE, Frankrijk",
+        "70819 TSA, 02V, 62971  ARRAS CEDEX 9, Frankrijk"
+      ]
+    },
+    {
+      "name": "PLATE FORME CORA ROYE REGIONALE",
+      "addresses": [
+        "17 Route Nationale, Zone Industrielle Sud, 80700  ROYE, Frankrijk",
+        "70819 TSA, PLATE FORME CORA 02 V ROYE REGIONALE, 62971  ARRAS CEDEX 9, Frankrijk"
+      ]
+    },
+    {
+      "name": "PLEIN.NL",
+      "addresses": [
+        "BISONSPOOR 3002-E401, 3605 LV  MAARSSEN"
+      ]
+    },
+    {
+      "name": "POIESZ SUPERMARKTEN BV",
+      "addresses": [
+        "Edisonstraat 3, 8606 JH  SNEEK"
+      ]
+    },
+    {
+      "name": "POWER TRADE KONRAD HRABIA",
+      "addresses": [
+        "Karola Kurpinskiego 10 M108, POZNAN 60-681, Polen"
+      ]
+    },
+    {
+      "name": "PRIMAPRIX SLU",
+      "addresses": [
+        "100 CALLE EMBAJADORES, MADRID 28012, Spanje",
+        "9 Av. La Veguilla, CABANILLAS DEL CAMPO GUADALAJARA 19171, Spanje"
+      ]
+    },
+    {
+      "name": "QUEBEN PARK S.L.",
+      "addresses": [
+        "11 2C Calle Orense, MADRID 28020, Spanje"
+      ]
+    },
+    {
+      "name": "RAAP TRADING SRL",
+      "addresses": [
+        "45 Via Ernesto Pascal, NAPOLI 80144, Italië"
+      ]
+    },
+    {
+      "name": "REMO ZAANDAM B.V.",
+      "addresses": [
+        "Kleine Tocht 14, 1507 CB  ZAANDAM"
+      ]
+    },
+    {
+      "name": "RENMARKET EOOD",
+      "addresses": [
+        "57 STOPANSKI DVOR, KOSTIEVO 4205, Bulgarije"
+      ]
+    },
+    {
+      "name": "RINFRESCO SL",
+      "addresses": [
+        "12 C/ de Correus, piso 4, puerta 4,, VALENCIA 46002, Spanje"
+      ]
+    },
+    {
+      "name": "SA SOGESMA",
+      "addresses": [
+        "Route de mettet 204, 5620  FLORENNES, België"
+      ]
+    },
+    {
+      "name": "SAEXMA, S.L.",
+      "addresses": [
+        "2 AVENIDA DE LAREDO, FUENLABRADA MADRID 28946, Spanje"
+      ]
+    },
+    {
+      "name": "SC TITAN COMERT SRL",
+      "addresses": [
+        "Bd. Mihai Viteazu 58, SALAJ, Roemenië"
+      ]
+    },
+    {
+      "name": "SCHMIDT IM-UND EXPORT GMBH & CO. KG",
+      "addresses": [
+        "Gewerbestrasse 9, 25923  SÜDERLÜGUM, Duitsland"
+      ]
+    },
+    {
+      "name": "SELLAX KFT",
+      "addresses": [
+        "12 SZABADFOLD TANY, TOMPA 6422, Hongarije"
+      ]
+    },
+    {
+      "name": "SIGVARD HELLBERGS SÄLJLAGER AKTIEBOLAG",
+      "addresses": [
+        "7 Rattvagen, SKOVDE 541 34, Zweden"
+      ]
+    },
+    {
+      "name": "SMART FOOD NL BV",
+      "addresses": [
+        "Singel 126, 1015 AE  AMSTERDAM",
+        "Cardiffweg 8, 9744 VA  GRONINGEN"
+      ]
+    },
+    {
+      "name": "SMARTECO",
+      "addresses": [
+        "1 ZI ROUTE DE PARIS, 14120  MONDEVILLE, Frankrijk"
+      ]
+    },
+    {
+      "name": "SOCIETE IMPORTATION EDOUARD LECLERC",
+      "addresses": [
+        "26 QUAI MARCEL BOYER, CS 10020, IVRY-SUR-SEINE, CEDEX, Frankrijk",
+        "6 Rue du Moulin Rouge, 28630   NOGENT LE PHAYE, Frankrijk"
+      ]
+    },
+    {
+      "name": "SOK",
+      "addresses": [
+        "34 Fleminginkatu, HELSINKI 00510, Finland"
+      ]
+    },
+    {
+      "name": "STOKOMANI SAS",
+      "addresses": [
+        "36 D36E Rue ZAC du Bois de Plaisance, 60280  VENETTE, Frankrijk",
+        "3 Avenue des Charmes, 60100  CREIL, Frankrijk"
+      ]
+    },
+    {
+      "name": "STUNTWINKEL B.V.",
+      "addresses": [
+        "WANDELWEG 75, 2980  ZOERSEL, België",
+        "Delften 23, 2390  MALLE, België",
+        "Zandstraat 46, 2980  ZOERSEL, België"
+      ]
+    },
+    {
+      "name": "SUHAIL TRADING BV",
+      "addresses": [
+        "Willem Brocadesdreef 2, 2132 PV  HOOFDDORP"
+      ]
+    },
+    {
+      "name": "SZA-CO KERESKEDELMI ES SZOLGALTATO KFT",
+      "addresses": [
+        "2 Izzo Street, KECSKEMET 6000, Hongarije"
+      ]
+    },
+    {
+      "name": "T.J.MORRIS LTD",
+      "addresses": [
+        "EQUINOX DRIVE, SOLSTICE BUSINESS PARK 1, AMESBURY, WILTSHIRE SP4 7GQ, Groot-Brittannië",
+        "EAST LANCS ROAD, AXIS BUSINESS PARK 1, GILLMOSS L11 OJA, Groot-Brittannië"
+      ]
+    },
+    {
+      "name": "TALPA GOODS B.V.",
+      "addresses": [
+        "Oude Kerkstraat 10, 4878 AA  ETTEN-LEUR"
+      ]
+    },
+    {
+      "name": "TEN ZWEEGE B.V.",
+      "addresses": [
+        "Nervistraat 22 24, 8013 RS  ZWOLLE",
+        "Mataramweg 7, 7722 ME  DALFSEN"
+      ]
+    },
+    {
+      "name": "TOKMANNI OY",
+      "addresses": [
+        "5 MOREENIKATU, MANTSALA 04600, Finland"
+      ]
+    },
+    {
+      "name": "TRITON SRL",
+      "addresses": [
+        "Str. George Calinescu 42, SATU MARE 440075, Roemenië"
+      ]
+    },
+    {
+      "name": "UAB INTEGRIA",
+      "addresses": [
+        "TRAKU G. 3/2, VILNIUS, Litouwen"
+      ]
+    },
+    {
+      "name": "VAN DER TANG TRADING B.V",
+      "addresses": [
+        "Verbreepark 19, 2731 BR  BENTHUIZEN"
+      ]
+    },
+    {
+      "name": "VOMAR VOORDEELMARKT",
+      "addresses": [
+        "Opaalstraat 2, 1812 RH  ALKMAAR",
+        "Opaalstraat 15, 1812 RH  ALKMAAR",
+        "Hertog Aalbrechtweg 32, 1823 DL  ALKMAAR"
+      ]
+    },
+    {
+      "name": "VRIESIA B.V.",
+      "addresses": [
+        "Nijverheidsweg 14, 3251 LP  STELLENDAM"
+      ]
+    },
+    {
+      "name": "WIBRA SUPERMARKT B.V.",
+      "addresses": [
+        "Hammerstraat 7, 8161 PH  EPE",
+        "Griftsemolenweg 38, 8171 NS  VAASSEN"
+      ]
+    },
+    {
+      "name": "WINSTPALLET B.V.",
+      "addresses": [
+        "Industrieweg 2 4, 1775 PV  MIDDENMEER"
+      ]
+    },
+    {
+      "name": "WORLDTRADING EUROPE B.V.B.A",
+      "addresses": [
+        "Baron van Loolaan 12, 9940  EVERGEM, België"
+      ]
+    },
+    {
+      "name": "WRIST SHIP SUPPLY A/S",
+      "addresses": [
+        "Bunschotenweg 58, 3089 KC  ROTTERDAM",
+        "60 Stigsborgvej, DK-9400  NOERRESUNDBY, Denemarken"
+      ]
+    },
+    {
+      "name": "WRIST-KLEVENBERG SHIP SUPPLY NL B.V.",
+      "addresses": [
+        "Bunschotenweg 58, 3089 KC  ROTTERDAM"
+      ]
+    },
+    {
+      "name": "YAKUMO ENTERPRISES LTD",
+      "addresses": [
+        "TRIKOMOU, DALI INDUSTRIAL AREA 3, NICOSIA 2540, Cyprus"
+      ]
+    }
+  ]
+}
