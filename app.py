@@ -6,56 +6,13 @@ Streamlit entrypoint for the VVP Calculator.
 
 from __future__ import annotations
 
-# --- force-load local 'services' package & submodules (Cloud name clash fix) ---
-import sys, os, pathlib, types, importlib.util
+import sys
+import os
+from pathlib import Path
 
-ROOT = pathlib.Path(__file__).resolve().parent
-SERVICES_DIR = ROOT / "services"
-WAREHOUSES_DIR = ROOT / "warehouses"
-ADMIN_DIR = ROOT / "admin"
-
-# put our project paths first
-for p in (ROOT, SERVICES_DIR, WAREHOUSES_DIR, ADMIN_DIR):
-    ps = str(p)
-    if ps not in sys.path:
-        sys.path.insert(0, ps)
-
-# register a dummy 'services' package pointing to our local folder
-if "services" not in sys.modules:
-    pkg = types.ModuleType("services")
-    pkg.__path__ = [str(SERVICES_DIR)]
-    sys.modules["services"] = pkg
-
-# register a dummy 'warehouses' package pointing to our local folder
-if "warehouses" not in sys.modules:
-    pkg_wh = types.ModuleType("warehouses")
-    pkg_wh.__path__ = [str(WAREHOUSES_DIR)]
-    sys.modules["warehouses"] = pkg_wh
-
-# register a dummy 'admin' package pointing to our local folder
-if "admin" not in sys.modules:
-    pkg_admin = types.ModuleType("admin")
-    pkg_admin.__path__ = [str(ADMIN_DIR)]
-    sys.modules["admin"] = pkg_admin
-
-def _ensure_module(modname: str, filepath: pathlib.Path):
-    """Load a module from a file and register it in sys.modules as modname."""
-    if modname in sys.modules:
-        return
-    spec = importlib.util.spec_from_file_location(modname, str(filepath))
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[modname] = module
-    assert spec and spec.loader
-    spec.loader.exec_module(module)  # type: ignore[attr-defined]
-
-# explicitly load the modules we import below
-_ensure_module("services.catalog", SERVICES_DIR / "catalog.py")
-_ensure_module("services.catalog_adapter", SERVICES_DIR / "catalog_adapter.py")
-_ensure_module("warehouses.final_calc", WAREHOUSES_DIR / "final_calc.py")
-_ensure_module("warehouses.second_leg", WAREHOUSES_DIR / "second_leg.py")
-_ensure_module("warehouses.generic", WAREHOUSES_DIR / "generic.py")
-# ------------------------------------------------------------------------------
-
+# Add project root to path
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 import streamlit as st
 from services.catalog import load as load_catalog
