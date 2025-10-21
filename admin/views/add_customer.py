@@ -1,6 +1,10 @@
 # admin/pages/add_customer.py
 from typing import List
 import streamlit as st
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from services.config_manager import load_catalog, save_catalog, add_customer as cm_add_customer
 
 def page_add_customer():
