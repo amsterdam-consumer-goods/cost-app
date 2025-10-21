@@ -16,8 +16,21 @@ import json
 from typing import Any, Dict
 
 import streamlit as st
-from services.config_manager import list_warehouses, load_catalog, save_catalog
+import sys
+import importlib.util
+from pathlib import Path
 
+# Manually load config_manager module
+_root = Path(__file__).resolve().parents[2]
+_cm_path = _root / "services" / "config_manager.py"
+_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
+_cm = importlib.util.module_from_spec(_spec)
+sys.modules["services.config_manager"] = _cm
+_spec.loader.exec_module(_cm)
+
+list_warehouses = _cm.list_warehouses
+load_catalog = _cm.load_catalog
+save_catalog = _cm.save_catalog
 
 # ---------------- helpers ----------------
 def _ensure_state() -> None:

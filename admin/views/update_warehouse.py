@@ -8,19 +8,29 @@ Admin • Update Warehouse
 """
 
 import streamlit as st
-from services.config_manager import (
-    load_catalog,
-    save_catalog,
-    list_warehouses,
-    get_wh_by_id,
-)
+import sys
+import importlib.util
+from pathlib import Path
+
+# Manually load config_manager module
+_root = Path(__file__).resolve().parents[2]
+_cm_path = _root / "services" / "config_manager.py"
+_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
+_cm = importlib.util.module_from_spec(_spec)
+sys.modules["services.config_manager"] = _cm
+_spec.loader.exec_module(_cm)
+
+load_catalog = _cm.load_catalog
+save_catalog = _cm.save_catalog
+list_warehouses = _cm.list_warehouses
+get_wh_by_id = _cm.get_wh_by_id
+
 from .helpers import (
     default_rates,
     default_features,
     normalize_rates,
     rates_block,
 )
-
 
 def page_update_warehouse():
     st.title("Admin • Update Warehouse")
@@ -205,7 +215,7 @@ def page_update_warehouse():
 
     # Second-leg
     second_leg = st.checkbox(
-        "Second-leg enabled",
+        "Second Warehouse Transfer enabled",
         value=bool(feats.get("second_leg", False)),
         key=skey("feat_second_leg"),
     )
