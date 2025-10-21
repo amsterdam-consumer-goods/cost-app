@@ -10,11 +10,21 @@ import sys
 import os
 from pathlib import Path
 
-# Add project root to path
+# Add project root to Python path FIRST
 ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# Force reload of our local modules to avoid Cloud caching issues
+import importlib
+for module_name in ['services', 'services.catalog', 'services.catalog_adapter', 
+                     'warehouses', 'warehouses.final_calc', 'warehouses.second_leg', 'warehouses.generic']:
+    if module_name in sys.modules:
+        del sys.modules[module_name]
 
 import streamlit as st
+
+# Now import our modules
 from services.catalog import load as load_catalog
 from services.catalog_adapter import normalize_catalog
 from warehouses.generic import compute_generic
