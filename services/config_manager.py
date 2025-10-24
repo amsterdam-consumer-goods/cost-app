@@ -44,7 +44,7 @@ def load_catalog() -> Dict[str, Any]:
             path.rename(backup)
             save_catalog(_DEF)
             data = json.loads(json.dumps(_DEF))
-    # defaults (mevcut tip korunur; yoksa dict/ver)
+    # defaults (mevcut tip korunur; yoksa dict ver)
     data.setdefault("warehouses", {})
     data.setdefault("customers", {})
     return data
@@ -115,20 +115,88 @@ def gen_customer_id(name: str, catalog: Dict[str, Any]) -> str:
 # Warehouse / Customer CRUD helpers
 # ------------------------------------------------------------
 def list_warehouse_ids(catalog: Dict[str, Any]) -> list[str]:
-    return sorted(catalog.get("warehouses", {}).keys())
+    """
+    warehouses hem dict (id->obj) hem list ([{...}]) olabilir.
+    Hepsinden id listesini üret.
+    """
+    ws = catalog.get("warehouses")
+    ids: list[str] = []
+
+    if isinstance(ws, dict):
+        ids = [str(k) for k in ws.keys()]
+    elif isinstance(ws, list):
+        for idx, itm in enumerate(ws):
+            if isinstance(itm, dict):
+                wid = itm.get("id") or itm.get("code") or itm.get("name") or str(idx)
+                ids.append(str(wid))
+            else:
+                ids.append(str(idx))
+    else:
+        ids = []
+
+    # tekilleştir + alfabetik sırala (case-insensitive)
+    return sorted(set(ids), key=lambda s: s.lower())
 
 
 def get_warehouse(catalog: Dict[str, Any], wid: str) -> Dict[str, Any]:
-    return catalog.get("warehouses", {}).get(wid, {})
+    """
+    warehouses dict ise doğrudan, list ise id/code/name eşleşmesiyle döndür.
+    """
+    ws = catalog.get("warehouses", {})
+    if isinstance(ws, dict):
+        return ws.get(wid, {})
+    if isinstance(ws, list):
+        for idx, itm in enumerate(ws):
+            if isinstance(itm, dict):
+                iw = str(itm.get("id") or itm.get("code") or itm.get("name") or idx)
+                if iw == str(wid):
+                    return itm
+    return {}
 
 
 def upsert_warehouse(
     catalog: Dict[str, Any], wid: str, payload: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], bool]:
+    """
+    warehouses dict veya list olabilir:
+    - dict: c['warehouses'][wid] = payload
+    - list: id/code/name eşleşirse replace, yoksa append (id alanı ekleyerek)
+    """
     c = json.loads(json.dumps(catalog))
-    was_new = wid not in c.get("warehouses", {})
-    c.setdefault("warehouses", {})[wid] = payload
-    return c, was_new
+    ws = c.get("warehouses")
+
+    # dict (veya None)
+    if isinstance(ws, dict) or ws is None:
+        c.setdefault("warehouses", {})
+        was_new = wid not in c["warehouses"]
+        c["warehouses"][wid] = payload
+        return c, was_new
+
+    # list
+    if isinstance(ws, list):
+        was_new = True
+        replaced = False
+        for i, itm in enumerate(ws):
+            if isinstance(itm, dict):
+                iw = str(itm.get("id") or itm.get("code") or itm.get("name") or i)
+                if iw == str(wid):
+                    ws[i] = payload
+                    replaced = True
+                    was_new = False
+                    break
+        if not replaced:
+            # liste yapısında kimlik tutarlılığı için payload’a id ekleyelim
+            if isinstance(payload, dict):
+                pl = dict(payload)
+                pl.setdefault("id", str(wid))
+                ws.append(pl)
+            else:
+                ws.append(payload)
+        return c, was_new
+
+    # beklenmeyen tip → dict’e dönüştür
+    c["warehouses"] = {wid: payload}
+    return c, True
 
 
 def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
