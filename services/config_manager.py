@@ -44,6 +44,7 @@ def load_catalog() -> Dict[str, Any]:
             path.rename(backup)
             save_catalog(_DEF)
             data = json.loads(json.dumps(_DEF))
+    # defaults (mevcut tip korunur; yoksa dict/ver)
     data.setdefault("warehouses", {})
     data.setdefault("customers", {})
     return data
@@ -71,7 +72,7 @@ def catalog_mtime() -> str:
 # ID helpers
 # ------------------------------------------------------------
 def _slugify(s: str) -> str:
-    s = s.strip().lower()
+    s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "_", s)
     s = re.sub(r"_+", "_", s).strip("_")
     return s or "item"
@@ -87,8 +88,26 @@ def unique_id(base: str, existing: set[str]) -> str:
     return f"{base}_{i}"
 
 
+def _existing_customer_ids(customers: Any) -> set[str]:
+    """
+    customers dict/list -> mevcut id seti
+    """
+    if isinstance(customers, dict):
+        return set(map(str, customers.keys()))
+    if isinstance(customers, list):
+        ids: set[str] = set()
+        for it in customers:
+            if isinstance(it, dict):
+                cid = it.get("id") or it.get("cid") or it.get("code") or it.get("name")
+                if cid:
+                    ids.add(str(cid))
+        return ids
+    return set()
+
+
 def gen_customer_id(name: str, catalog: Dict[str, Any]) -> str:
-    existing = set(catalog.get("customers", {}).keys())
+    customers = catalog.get("customers", {})
+    existing = _existing_customer_ids(customers)
     return unique_id(name, existing)
 
 
@@ -113,12 +132,38 @@ def upsert_warehouse(
 
 
 def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    """
+    customers alanı dict de olabilir list de.
+    - dict ise key->obj
+    - list ise append
+    - hiç yoksa dict oluşturur
+    """
     c = json.loads(json.dumps(catalog))
+    customers = c.get("customers")
+
+    # id üret
     cid = gen_customer_id(payload.get("name", "customer"), c)
-    c.setdefault("customers", {})[cid] = {
+    record = {
         "name": payload.get("name", cid),
         "addresses": payload.get("addresses", []),
+        "id": cid,
     }
+
+    if customers is None:
+        # hiç yoksa dict ile başlat
+        c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
+        return c, cid
+
+    if isinstance(customers, dict):
+        customers[cid] = {k: v for k, v in record.items() if k != "id"}
+        return c, cid
+
+    if isinstance(customers, list):
+        customers.append(record)
+        return c, cid
+
+    # beklenmeyen tip: güvenli fallback
+    c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
     return c, cid
 
 
@@ -153,7 +198,7 @@ def default_warehouse(name: str) -> Dict[str, Any]:
 def _normalize_wh_list(obj: Any) -> List[Dict[str, Any]]:
     """
     obj şunlardan biri olabilir:
-      - full catalog dict ({"warehouses": {...}} veya {"warehouses": [...]})
+      - full catalog dict ({"warehouses": {...}} veya {"warehouses": [...]} )
       - warehouses dict (id -> data)
       - warehouses list ([{...}, {...}])
     Hepsini list-of-dicts (id dahil) şekline çevirir.
