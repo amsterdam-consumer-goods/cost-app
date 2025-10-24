@@ -1,6 +1,7 @@
 # services/config_manager.py
 """
 Single source of truth for loading/saving the catalog and helpers.
+Supports persistent storage via GitHub Gist when configured.
 """
 from __future__ import annotations
 import json, os, re
@@ -15,9 +16,29 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CATALOG_REL = Path("data/catalog.json")
 _DEF: Dict[str, Any] = {"warehouses": {}, "customers": {}}
 
+# ------------------------------------------------------------
+# Secrets / config helpers
+# ------------------------------------------------------------
+def _get_secret(name: str) -> Optional[str]:
+    # 1) Env
+    v = os.environ.get(name)
+    if v:
+        return v
+    # 2) Streamlit secrets (opsiyonel)
+    try:
+        import streamlit as st  # type: ignore
+        return st.secrets.get(name)  # type: ignore
+    except Exception:
+        return None
+
+_GIST_ID = _get_secret("GITHUB_GIST_ID")
+_GIST_TOKEN = _get_secret("GITHUB_TOKEN")
+_GIST_FILENAME = _get_secret("GITHUB_GIST_FILENAME") or "catalog.json"
+
+_USE_GIST = bool(_GIST_ID and _GIST_TOKEN)
 
 # ------------------------------------------------------------
-# Core file helpers
+# Core file helpers (local)
 # ------------------------------------------------------------
 def get_catalog_path() -> Path:
     env_path = os.environ.get("CATALOG_PATH")
@@ -25,12 +46,68 @@ def get_catalog_path() -> Path:
         return Path(env_path).expanduser().resolve()
     return (_PROJECT_ROOT / _DEFAULT_CATALOG_REL).resolve()
 
-
 def _ensure_parent_dir(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
 
+# ------------------------------------------------------------
+# Gist helpers (persistent cloud storage)
+# ------------------------------------------------------------
+def _gist_headers() -> Dict[str, str]:
+    return {
+        "Authorization": f"token {_GIST_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
+def _load_from_gist() -> Dict[str, Any]:
+    import requests  # Streamlit Cloud’da mevcut
+    url = f"https://api.github.com/gists/{_GIST_ID}"
+    r = requests.get(url, headers=_gist_headers(), timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    files = data.get("files", {})
+    if _GIST_FILENAME not in files or "content" not in files[_GIST_FILENAME]:
+        # Dosya yoksa oluştur
+        _save_to_gist(_DEF)
+        return json.loads(json.dumps(_DEF))
+    content = files[_GIST_FILENAME].get("content", "")
+    if not content.strip():
+        return json.loads(json.dumps(_DEF))
+    try:
+        obj = json.loads(content)
+    except json.JSONDecodeError:
+        # Bozuksa default yaz
+        _save_to_gist(_DEF)
+        obj = json.loads(json.dumps(_DEF))
+    obj.setdefault("warehouses", {})
+    obj.setdefault("customers", {})
+    return obj
+
+def _save_to_gist(payload: Dict[str, Any]) -> None:
+    import requests
+    url = f"https://api.github.com/gists/{_GIST_ID}"
+    body = {
+        "files": {
+            _GIST_FILENAME: {
+                "content": json.dumps(payload, ensure_ascii=False, indent=2)
+            }
+        }
+    }
+    r = requests.patch(url, headers=_gist_headers(), data=json.dumps(body), timeout=15)
+    r.raise_for_status()
+
+# ------------------------------------------------------------
+# Public API (load/save)
+# ------------------------------------------------------------
 def load_catalog() -> Dict[str, Any]:
+    if _USE_GIST:
+        try:
+            return _load_from_gist()
+        except Exception:
+            # Gist erişilemezse local fallback
+            pass
+
     path = get_catalog_path()
     if not path.exists():
         _ensure_parent_dir(path)
@@ -44,13 +121,16 @@ def load_catalog() -> Dict[str, Any]:
             path.rename(backup)
             save_catalog(_DEF)
             data = json.loads(json.dumps(_DEF))
-    # defaults (mevcut tip korunur; yoksa dict ver)
     data.setdefault("warehouses", {})
     data.setdefault("customers", {})
     return data
 
-
 def save_catalog(data: Dict[str, Any]) -> Path:
+    if _USE_GIST:
+        _save_to_gist(data)
+        # dummy path return for API compatibility
+        return Path(f"gist://{_GIST_ID}/{_GIST_FILENAME}")
+
     path = get_catalog_path()
     _ensure_parent_dir(path)
     tmp = path.with_suffix(".json.tmp")
@@ -59,14 +139,14 @@ def save_catalog(data: Dict[str, Any]) -> Path:
     os.replace(tmp, path)
     return path
 
-
 def catalog_mtime() -> str:
+    if _USE_GIST:
+        return "(stored in GitHub Gist)"
     p = get_catalog_path()
     if not p.exists():
         return "(not created yet)"
     ts = datetime.fromtimestamp(p.stat().st_mtime)
     return ts.strftime("%Y-%m-%d %H:%M:%S")
-
 
 # ------------------------------------------------------------
 # ID helpers
@@ -77,7 +157,6 @@ def _slugify(s: str) -> str:
     s = re.sub(r"_+", "_", s).strip("_")
     return s or "item"
 
-
 def unique_id(base: str, existing: set[str]) -> str:
     base = _slugify(base)
     if base not in existing:
@@ -87,11 +166,7 @@ def unique_id(base: str, existing: set[str]) -> str:
         i += 1
     return f"{base}_{i}"
 
-
 def _existing_customer_ids(customers: Any) -> set[str]:
-    """
-    customers dict/list -> mevcut id seti
-    """
     if isinstance(customers, dict):
         return set(map(str, customers.keys()))
     if isinstance(customers, list):
@@ -104,24 +179,17 @@ def _existing_customer_ids(customers: Any) -> set[str]:
         return ids
     return set()
 
-
 def gen_customer_id(name: str, catalog: Dict[str, Any]) -> str:
     customers = catalog.get("customers", {})
     existing = _existing_customer_ids(customers)
     return unique_id(name, existing)
 
-
 # ------------------------------------------------------------
-# Warehouse / Customer CRUD helpers
+# Warehouse / Customer CRUD helpers (dict/list tolerant)
 # ------------------------------------------------------------
 def list_warehouse_ids(catalog: Dict[str, Any]) -> list[str]:
-    """
-    warehouses hem dict (id->obj) hem list ([{...}]) olabilir.
-    Hepsinden id listesini üret.
-    """
     ws = catalog.get("warehouses")
     ids: list[str] = []
-
     if isinstance(ws, dict):
         ids = [str(k) for k in ws.keys()]
     elif isinstance(ws, list):
@@ -133,15 +201,9 @@ def list_warehouse_ids(catalog: Dict[str, Any]) -> list[str]:
                 ids.append(str(idx))
     else:
         ids = []
-
-    # tekilleştir + alfabetik sırala (case-insensitive)
     return sorted(set(ids), key=lambda s: s.lower())
 
-
 def get_warehouse(catalog: Dict[str, Any], wid: str) -> Dict[str, Any]:
-    """
-    warehouses dict ise doğrudan, list ise id/code/name eşleşmesiyle döndür.
-    """
     ws = catalog.get("warehouses", {})
     if isinstance(ws, dict):
         return ws.get(wid, {})
@@ -153,25 +215,17 @@ def get_warehouse(catalog: Dict[str, Any], wid: str) -> Dict[str, Any]:
                     return itm
     return {}
 
-
 def upsert_warehouse(
     catalog: Dict[str, Any], wid: str, payload: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], bool]:
-    """
-    warehouses dict veya list olabilir:
-    - dict: c['warehouses'][wid] = payload
-    - list: id/code/name eşleşirse replace, yoksa append (id alanı ekleyerek)
-    """
     c = json.loads(json.dumps(catalog))
     ws = c.get("warehouses")
-
     # dict (veya None)
     if isinstance(ws, dict) or ws is None:
         c.setdefault("warehouses", {})
         was_new = wid not in c["warehouses"]
         c["warehouses"][wid] = payload
         return c, was_new
-
     # list
     if isinstance(ws, list):
         was_new = True
@@ -185,7 +239,6 @@ def upsert_warehouse(
                     was_new = False
                     break
         if not replaced:
-            # liste yapısında kimlik tutarlılığı için payload’a id ekleyelim
             if isinstance(payload, dict):
                 pl = dict(payload)
                 pl.setdefault("id", str(wid))
@@ -193,51 +246,35 @@ def upsert_warehouse(
             else:
                 ws.append(payload)
         return c, was_new
-
-    # beklenmeyen tip → dict’e dönüştür
+    # fallback
     c["warehouses"] = {wid: payload}
     return c, True
 
-
 def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
-    """
-    customers alanı dict de olabilir list de.
-    - dict ise key->obj
-    - list ise append
-    - hiç yoksa dict oluşturur
-    """
     c = json.loads(json.dumps(catalog))
     customers = c.get("customers")
-
-    # id üret
     cid = gen_customer_id(payload.get("name", "customer"), c)
     record = {
         "name": payload.get("name", cid),
         "addresses": payload.get("addresses", []),
         "id": cid,
+        # optional fields preserved if present in payload (e.g., warehouses)
+        **({k: v for k, v in payload.items() if k not in {"name", "addresses"}}),
     }
-
     if customers is None:
-        # hiç yoksa dict ile başlat
         c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
         return c, cid
-
     if isinstance(customers, dict):
         customers[cid] = {k: v for k, v in record.items() if k != "id"}
         return c, cid
-
     if isinstance(customers, list):
         customers.append(record)
         return c, cid
-
-    # beklenmeyen tip: güvenli fallback
     c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
     return c, cid
 
-
 def default_rates() -> Dict[str, float]:
     return {"inbound": 0.0, "outbound": 0.0, "storage": 0.0, "order_fee": 0.0}
-
 
 def default_features() -> Dict[str, Any]:
     return {
@@ -247,35 +284,15 @@ def default_features() -> Dict[str, Any]:
         "second_leg": {"enabled": False, "target": None},
     }
 
-
 def default_warehouse(name: str) -> Dict[str, Any]:
     return {"name": name, "rates": default_rates(), "features": default_features()}
 
-
 # ------------------------------------------------------------
-# Backward-compatibility helpers (robust for admin.views)
-#   - list_warehouses(...)  supports:
-#       * ()
-#       * (catalog_or_warehouses)
-#       * (path=...)
-#   - get_wh_by_id(...)     supports:
-#       * (wid)
-#       * (catalog_or_warehouses, wid)
-#       * (wid, path=...)
+# Backward-compat helpers for admin
 # ------------------------------------------------------------
 def _normalize_wh_list(obj: Any) -> List[Dict[str, Any]]:
-    """
-    obj şunlardan biri olabilir:
-      - full catalog dict ({"warehouses": {...}} veya {"warehouses": [...]} )
-      - warehouses dict (id -> data)
-      - warehouses list ([{...}, {...}])
-    Hepsini list-of-dicts (id dahil) şekline çevirir.
-    """
-    # 1) Full catalog dict ise:
     if isinstance(obj, dict) and ("warehouses" in obj):
         return _normalize_wh_list(obj["warehouses"])
-
-    # 2) Warehouses dict (id -> data) ise:
     if isinstance(obj, dict):
         items: List[Dict[str, Any]] = []
         for wid, data in obj.items():
@@ -284,80 +301,49 @@ def _normalize_wh_list(obj: Any) -> List[Dict[str, Any]]:
             else:
                 item = {"id": str(wid), "value": data}
             items.append(item)
-        # isme göre, yoksa id'ye göre sırala
         return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
-
-    # 3) Zaten list ise:
     if isinstance(obj, list):
         items: List[Dict[str, Any]] = []
         for idx, itm in enumerate(obj):
             if isinstance(itm, dict):
-                # id yoksa code/name/index’ten türet
                 if "id" not in itm:
-                    if "code" in itm:       # tercih 1
+                    if "code" in itm:
                         itm = {"id": str(itm["code"]), **itm}
-                    elif "name" in itm:     # tercih 2
+                    elif "name" in itm:
                         itm = {"id": str(itm["name"]), **itm}
-                    else:                   # fallback: index
+                    else:
                         itm = {"id": str(idx), **itm}
                 items.append(itm)
             else:
                 items.append({"id": str(idx), "value": itm})
         return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
-
-    # 4) Diğer durumlar: boş
     return []
 
-
 def list_warehouses(*args, **kwargs) -> List[Dict[str, Any]]:
-    """
-    Eski çağrılarla uyumlu:
-      - list_warehouses()
-      - list_warehouses(catalog_veya_warehouses)
-      - list_warehouses(path=...)
-    """
     path = kwargs.get("path")
-
-    # Argüman verilmişse (catalog veya doğrudan warehouses) onu normalize et
     if len(args) >= 1:
         return _normalize_wh_list(args[0])
-
-    # path verilmişse dosyadan yükle
     if path is not None:
         p = Path(path)
         with p.open("r", encoding="utf-8") as f:
             data = json.load(f)
         return _normalize_wh_list(data)
-
-    # default: mevcut catalog'u yükle
     return _normalize_wh_list(load_catalog())
 
-
 def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
-    """
-    Eski çağrılarla uyumlu:
-      - get_wh_by_id(wid)
-      - get_wh_by_id(catalog_veya_warehouses, wid)
-      - get_wh_by_id(wid, path=...)
-    """
     path = kwargs.get("path")
-
     source = None
     wid = None
-
     if len(args) == 1:
         wid = str(args[0])
     elif len(args) >= 2:
-        source = args[0]    # catalog veya warehouses veya list
+        source = args[0]
         wid = str(args[1])
     else:
         return None
-
-    # Kaynak verilmişse normalize et
     if source is not None:
         items = list_warehouses(source)
     else:
-        # path verilmişse oradan, yoksa mevcut catalog
         if path is not None:
             p = Path(path)
             with p.open("r", encoding="utf-8") as f:
@@ -365,8 +351,6 @@ def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
             items = list_warehouses(data)
         else:
             items = list_warehouses(load_catalog())
-
-    # id / code / name eşleşmesi
     for w in items:
         if str(w.get("id")) == wid or str(w.get("code")) == wid or str(w.get("name")) == wid:
             return w
