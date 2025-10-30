@@ -2,7 +2,12 @@
 """
 Single source of truth for loading/saving the catalog and helpers.
 Cloud (GitHub Gist) + automatic local fallback. Never crash UI on 401.
+
+This module also exposes backward-compat helpers expected by admin views:
+- list_warehouses(source_or_kwargs)
+- get_wh_by_id(source_or_id, wid?) 
 """
+
 from __future__ import annotations
 import json, os, re
 from pathlib import Path
@@ -187,7 +192,7 @@ def catalog_mtime() -> str:
     return ts.strftime("%Y-%m-%d %H:%M:%S")
 
 # ------------------------------------------------------------
-# ID + CRUD helpers (unchanged)
+# ID + CRUD helpers
 # ------------------------------------------------------------
 def _slugify(s: str) -> str:
     s = (s or "").strip().lower()
@@ -301,3 +306,87 @@ def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict
         return c, cid
     c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
     return c, cid
+
+# ------------------------------------------------------------
+# Backward-compat: list_warehouses & get_wh_by_id expected by admin views
+# ------------------------------------------------------------
+def _normalize_wh_list(obj: Any) -> List[Dict[str, Any]]:
+    """Return list of dicts with at least an 'id' key, sorted for UI."""
+    if isinstance(obj, dict) and ("warehouses" in obj):
+        return _normalize_wh_list(obj["warehouses"])
+    if isinstance(obj, dict):
+        items: List[Dict[str, Any]] = []
+        for wid, data in obj.items():
+            if isinstance(data, dict):
+                item = {"id": str(wid), **data}
+            else:
+                item = {"id": str(wid), "value": data}
+            items.append(item)
+        return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
+    if isinstance(obj, list):
+        items: List[Dict[str, Any]] = []
+        for idx, itm in enumerate(obj):
+            if isinstance(itm, dict):
+                if "id" not in itm:
+                    if "code" in itm:
+                        itm = {"id": str(itm["code"]), **itm}
+                    elif "name" in itm:
+                        itm = {"id": str(itm["name"]), **itm}
+                    else:
+                        itm = {"id": str(idx), **itm}
+                items.append(itm)
+            else:
+                items.append({"id": str(idx), "value": itm})
+        return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
+    return []
+
+def list_warehouses(*args, **kwargs) -> List[Dict[str, Any]]:
+    """
+    Compat shim used by admin/views/update_warehouse.py:
+    - list_warehouses(catalog_dict)  -> normalized list
+    - list_warehouses(path="...")    -> load JSON then normalize
+    - list_warehouses()              -> load_catalog() then normalize
+    """
+    path = kwargs.get("path")
+    if len(args) >= 1:
+        return _normalize_wh_list(args[0])
+    if path is not None:
+        p = Path(path)
+        with p.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return _normalize_wh_list(data)
+    return _normalize_wh_list(load_catalog())
+
+def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
+    """
+    Compat shim:
+    - get_wh_by_id(wid)
+    - get_wh_by_id(catalog, wid)
+    - get_wh_by_id(path="...")  # not typical, but supported with kwargs
+    """
+    path = kwargs.get("path")
+    source = None
+    wid = None
+    if len(args) == 1:
+        wid = str(args[0])
+    elif len(args) >= 2:
+        source = args[0]
+        wid = str(args[1])
+    else:
+        return None
+
+    if source is not None:
+        items = list_warehouses(source)
+    else:
+        if path is not None:
+            p = Path(path)
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            items = list_warehouses(data)
+        else:
+            items = list_warehouses(load_catalog())
+
+    for w in items:
+        if str(w.get("id")) == wid or str(w.get("code")) == wid or str(w.get("name")) == wid:
+            return w
+    return None
