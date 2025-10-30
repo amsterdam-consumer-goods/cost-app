@@ -283,8 +283,8 @@ def page_add_customer():
             )
 
             col_save, col_delete = st.columns([1, 1])
-            save_clicked = col_save.form_submit_button("Save changes", type="primary")
-            delete_clicked = col_delete.form_submit_button("Delete customer")
+            save_clicked = col_save.form_submit_button("💾 Save changes", type="primary")
+            delete_clicked = col_delete.form_submit_button("🗑️ Delete customer", type="secondary")
 
         if save_clicked:
             edited_addrs: List[str] = []
@@ -324,27 +324,20 @@ def page_add_customer():
             warn = get_last_warning()
             if warn:
                 st.info(warn)
-            # Clear success flag
-            if st.button("Clear message", key="clear_edit_success"):
-                ss.edit_success = False
-                st.rerun()
+            ss.edit_success = False
 
+        # DIRECT DELETE - No confirmation popup
         if delete_clicked:
-            with st.popover("Confirm deletion"):
-                st.warning(f"Delete **{cid}** permanently?")
-                confirm = st.checkbox("I understand, delete this customer.")
-                really = st.button("Confirm delete", type="primary", disabled=not confirm)
-                if really:
-                    # Fresh catalog load before deleting
-                    catalog = load_catalog()
-                    catalog = _delete_customer_by_id(catalog, cid)
-                    save_catalog(catalog)
-                    
-                    # Clear all customer-related session state
-                    for k in list(ss.keys()):
-                        if str(k).startswith(f"ed_{cid}_") or k == "selected_customer_cid":
-                            del ss[k]
-                    
-                    ss.delete_success = True
-                    st.toast("🗑️ Customer deleted", icon="🗑️")
-                    st.rerun()
+            # Fresh catalog load before deleting
+            catalog = load_catalog()
+            catalog = _delete_customer_by_id(catalog, cid)
+            save_catalog(catalog)
+            
+            # Clear all customer-related session state
+            for k in list(ss.keys()):
+                if str(k).startswith(f"ed_{cid}_") or k == "selected_customer_cid" or k == "edit_customer_choices_hash":
+                    del ss[k]
+            
+            st.toast("🗑️ Customer deleted", icon="🗑️")
+            st.success(f"🗑️ Customer **{cid}** deleted successfully")
+            st.rerun()

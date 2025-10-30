@@ -44,39 +44,34 @@ def _safe_read_json(path: str):
 
 def _load_customers_from_catalog() -> tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    CRITICAL FIX: Remove @st.cache_data to always load fresh customer data.
-    This ensures newly added customers appear immediately in the dropdown.
+    CRITICAL FIX: Use config_manager.list_customers() instead of catalog.load()
+    This ensures customers from BOTH dict and list storage formats are loaded correctly.
+    NO CACHING - always fresh data.
     """
     try:
-        from services.catalog import load as load_catalog, path as catalog_path
-        from services.catalog_adapter import normalize_catalog
-    except Exception:
-        return [], None
-
-    try:
-        cat = normalize_catalog(load_catalog())
-        rows = cat.get("customers") or cat.get("clients") or []
-        if not isinstance(rows, list):
+        # CRITICAL: Import from config_manager, not catalog
+        from services.config_manager import list_customers, get_catalog_path
+        
+        # Get fresh customer list
+        customers_list = list_customers()  # Returns normalized list with id, name, addresses
+        
+        if not customers_list:
             return [], None
-
+        
         norm_rows: List[Dict[str, Any]] = []
-        for r in rows:
-            if not isinstance(r, dict):
-                continue
-            name = str(r.get("name", "")).strip()
+        for c in customers_list:
+            name = str(c.get("name", "")).strip()
             if not name:
                 continue
-            addrs_raw = r.get("addresses") or r.get("warehouses") or []
-            seen, addrs = set(), []
-            for a in (addrs_raw if isinstance(addrs_raw, list) else [addrs_raw]):
-                s = str(a).strip()
-                if s and s not in seen:
-                    addrs.append(s)
-                    seen.add(s)
+            addrs = c.get("addresses", [])
+            if not isinstance(addrs, list):
+                addrs = [addrs] if addrs else []
             norm_rows.append({"name": name, "addresses": addrs})
-        p = catalog_path()
-        return norm_rows, (str(p) if p else "data/catalog.json")
-    except Exception:
+        
+        catalog_path = get_catalog_path()
+        return norm_rows, str(catalog_path)
+    except Exception as e:
+        st.error(f"Error loading customers: {e}")
         return [], None
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -245,18 +240,22 @@ def _get_addresses_for(data: List[Dict[str, Any]], customer: str) -> List[str]:
 def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     st.subheader("Final Calculator")
 
-    # CRITICAL FIX: Always load fresh customer data (no caching)
+    # CRITICAL FIX: Always load fresh customer data using config_manager
     rows, catalog_source = _load_customers_from_catalog()
     used_source: Optional[str] = None
+    
     if rows:
         used_source = catalog_source or "data/catalog.json"
     else:
+        # Fallback to legacy customers.json if no customers in catalog
         legacy = _safe_read_json("data/customers.json")
         if legacy is None:
-            st.error("Customer data not found in catalog.json or data/customers.json.")
-            st.stop()
-        rows = legacy if isinstance(legacy, list) else []
-        used_source = os.path.abspath("data/customers.json")
+            st.info("ℹ️ No customers found. Add customers in the Admin Panel.")
+            rows = []
+            used_source = "No customers"
+        else:
+            rows = legacy if isinstance(legacy, list) else []
+            used_source = os.path.abspath("data/customers.json")
 
     customers = _get_customers(rows)
     
