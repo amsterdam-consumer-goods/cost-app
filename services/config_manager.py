@@ -68,6 +68,16 @@ def get_catalog_path() -> Path:
 def _ensure_parent_dir(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
 
+def _write_local_catalog(data: Dict[str, Any]) -> Path:
+    """ALWAYS write to local catalog file."""
+    path = get_catalog_path()
+    _ensure_parent_dir(path)
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+    return path
+
 # ------------------------------------------------------------
 # Gist helpers
 # ------------------------------------------------------------
@@ -134,58 +144,53 @@ def _save_to_gist(payload: Dict[str, Any]) -> None:
 # Public API (load/save) with safe fallback
 # ------------------------------------------------------------
 def load_catalog() -> Dict[str, Any]:
-    global _GIST_DISABLED_RUNTIME
-    if _can_use_gist():
-        try:
-            return _load_from_gist()
-        except GistError as e:
-            _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage (GitHub Gist) erişilemedi: {e}. Yerel dosyaya geçildi.")
-        except Exception as e:
-            _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage beklenmeyen hata: {e}. Yerel dosyaya geçildi.")
-
+    """
+    CRITICAL: Always load from LOCAL file, not Gist.
+    This ensures we see the latest changes immediately.
+    """
     path = get_catalog_path()
     if not path.exists():
         _ensure_parent_dir(path)
-        save_catalog(_DEF)
+        _write_local_catalog(_DEF)
         return json.loads(json.dumps(_DEF))
+    
     with path.open("r", encoding="utf-8") as f:
         try:
             data = json.load(f)
         except json.JSONDecodeError:
             backup = path.with_suffix(".corrupt.json")
             path.rename(backup)
-            save_catalog(_DEF)
+            _write_local_catalog(_DEF)
             data = json.loads(json.dumps(_DEF))
+    
     data.setdefault("warehouses", {})
     data.setdefault("customers", {})
     return data
 
 def save_catalog(data: Dict[str, Any]) -> Path:
+    """
+    CRITICAL: ALWAYS write to local file first.
+    Then optionally try to sync to Gist (but don't fail if Gist fails).
+    """
     global _GIST_DISABLED_RUNTIME
+    
+    # STEP 1: ALWAYS write to local file (guaranteed success)
+    local_path = _write_local_catalog(data)
+    
+    # STEP 2: Optionally try to sync to Gist (best effort)
     if _can_use_gist():
         try:
             _save_to_gist(data)
-            return Path(f"gist://{_GIST_ID}/{_GIST_FILENAME}")
         except GistError as e:
             _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage kaydı başarısız: {e}. Yerel dosyaya kaydedildi.")
+            _set_warning(f"Cloud storage sync failed: {e}. Data saved locally.")
         except Exception as e:
             _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage beklenmeyen hata: {e}. Yerel dosyaya kaydedildi.")
-
-    path = get_catalog_path()
-    _ensure_parent_dir(path)
-    tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-    return path
+            _set_warning(f"Cloud storage unexpected error: {e}. Data saved locally.")
+    
+    return local_path
 
 def catalog_mtime() -> str:
-    if _can_use_gist():
-        return "(stored in GitHub Gist)"
     p = get_catalog_path()
     if not p.exists():
         return "(not created yet)"
