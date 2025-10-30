@@ -153,6 +153,25 @@
         "transfer": false,
         "second_leg": false
       }
+    },
+    {
+      "id": "sl_spedka",
+      "name": "Spedka Slovenia",
+      "rates": {
+        "inbound": 1.05,
+        "outbound": 1.05,
+        "storage": 0.91,
+        "order_fee": 0
+      },
+      "features": {
+        "labeling": true,
+        "transfer": false,
+        "second_leg": false,
+        "label_costs": {
+          "label": 0.03,
+          "labelling": 0.0
+        }
+      }
     }
   ],
   "customers": [
