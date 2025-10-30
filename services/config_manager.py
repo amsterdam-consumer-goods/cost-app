@@ -69,15 +69,24 @@ def _ensure_parent_dir(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
 
 def _write_local_catalog(data: Dict[str, Any]) -> Path:
-    """ALWAYS write to local catalog file."""
+    """ALWAYS write to local catalog file with GUARANTEED flush to disk."""
     path = get_catalog_path()
     _ensure_parent_dir(path)
     tmp = path.with_suffix(".json.tmp")
+    
+    # Write to temp file with explicit flush and sync
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()              # ← BUNU EKLE
+        os.fsync(f.fileno())   # ← BUNU EKLE
+    
     os.replace(tmp, path)
+    
+    # Verify the file was written
+    if not path.exists():    # ← BUNU EKLE
+        raise IOError(f"Failed to write catalog to {path}")  # ← BUNU EKLE
+    
     return path
-
 # ------------------------------------------------------------
 # Gist helpers
 # ------------------------------------------------------------
