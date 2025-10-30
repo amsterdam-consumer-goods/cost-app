@@ -307,6 +307,34 @@ def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict
     c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
     return c, cid
 
+def list_customers(catalog: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Returns a normalized list of customers [{id,name,addresses,...}], independent of dict/list storage."""
+    if catalog is None:
+        catalog = load_catalog()
+    customers = catalog.get("customers", {})
+    out: List[Dict[str, Any]] = []
+    if isinstance(customers, dict):
+        for cid, obj in customers.items():
+            if isinstance(obj, dict):
+                rec = {"id": str(cid), "name": obj.get("name", str(cid)), "addresses": obj.get("addresses", [])}
+                # keep other fields
+                for k, v in obj.items():
+                    if k not in rec:
+                        rec[k] = v
+                out.append(rec)
+    elif isinstance(customers, list):
+        for it in customers:
+            if isinstance(it, dict):
+                cid = str(it.get("id") or it.get("cid") or it.get("code") or it.get("name") or "")
+                if not cid:
+                    continue
+                rec = {"id": cid, "name": it.get("name", cid), "addresses": it.get("addresses", [])}
+                for k, v in it.items():
+                    if k not in rec:
+                        rec[k] = v
+                out.append(rec)
+    return sorted(out, key=lambda x: x.get("name", "").lower())
+
 # ------------------------------------------------------------
 # Backward-compat: list_warehouses & get_wh_by_id expected by admin views
 # ------------------------------------------------------------
@@ -390,3 +418,30 @@ def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
         if str(w.get("id")) == wid or str(w.get("code")) == wid or str(w.get("name")) == wid:
             return w
     return None
+
+def list_customers(catalog: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Return customers as a normalized list: [{id, name, addresses, ...}]."""
+    if catalog is None:
+        catalog = load_catalog()
+    customers = catalog.get("customers", {})
+    out: List[Dict[str, Any]] = []
+    if isinstance(customers, dict):
+        for cid, obj in customers.items():
+            if isinstance(obj, dict):
+                rec = {"id": str(cid), "name": obj.get("name", str(cid)), "addresses": obj.get("addresses", [])}
+                for k, v in obj.items():
+                    if k not in rec:
+                        rec[k] = v
+                out.append(rec)
+    elif isinstance(customers, list):
+        for it in customers:
+            if isinstance(it, dict):
+                cid = str(it.get("id") or it.get("cid") or it.get("code") or it.get("name") or "")
+                if not cid:
+                    continue
+                rec = {"id": cid, "name": it.get("name", cid), "addresses": it.get("addresses", [])}
+                for k, v in it.items():
+                    if k not in rec:
+                        rec[k] = v
+                out.append(rec)
+    return sorted(out, key=lambda x: x.get("name", "").lower())

@@ -129,6 +129,25 @@ with hdr_r:
         st.rerun()
 st.markdown("---")
 
+# ---- Customer selector (reads from config_manager, shows Admin-created customers) ----
+from services.config_manager import list_customers
+
+customers = list_customers()  # normalized: [{id,name,addresses,...}]
+cust_ids = [c["id"] for c in customers]
+cust_names = {c["id"]: c["name"] for c in customers}
+
+st.subheader("Customer")
+if cust_ids:
+    st.session_state.customer_id = st.selectbox(
+        "Select Customer",
+        options=cust_ids,
+        format_func=lambda cid: cust_names.get(cid, cid),
+        key="user_selected_customer_id",
+    )
+else:
+    st.warning("No customers found. Add one in Admin → Add customer.")
+    st.session_state.customer_id = None
+
 if "step" not in st.session_state:
     st.session_state.step = "inputs"
 
