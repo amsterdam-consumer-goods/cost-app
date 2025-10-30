@@ -18,7 +18,8 @@ _spec.loader.exec_module(_cm)
 load_catalog = _cm.load_catalog
 save_catalog = _cm.save_catalog
 cm_add_customer = _cm.add_customer
-list_warehouse_ids = _cm.list_warehouse_ids  # for WH linking
+list_warehouse_ids = _cm.list_warehouse_ids
+get_last_warning = getattr(_cm, "get_last_warning", lambda: None)
 
 # ----------------------------- helpers -----------------------------
 def _get_customers(catalog: Dict[str, Any]):
@@ -48,7 +49,6 @@ def _get_customer_by_id(catalog: Dict[str, Any], cid: str) -> Optional[Dict[str,
     if isinstance(customers, dict):
         obj = customers.get(cid)
         if isinstance(obj, dict):
-            # normalize return with id
             return {"id": cid, **obj}
     elif isinstance(customers, list):
         for obj in customers:
@@ -104,7 +104,12 @@ def _delete_customer_by_id(catalog: Dict[str, Any], cid: str) -> Dict[str, Any]:
 def page_add_customer():
     st.title("Admin • Customers")
 
-    # Kalıcı başarı mesajı için session bayrakları (flicker engel)
+    # Show any backend warning (e.g., Gist fallback)
+    warn = get_last_warning()
+    if warn:
+        st.info(warn)
+
+    # Persistent flags
     ss = st.session_state
     ss.setdefault("create_success_cid", "")
     ss.setdefault("edit_success", False)
@@ -115,11 +120,15 @@ def page_add_customer():
     # ------------------------- CREATE -------------------------
     with tab_create:
         catalog = load_catalog()
+        # Re-show backend warning if any (e.g., after rerun)
+        warn = get_last_warning()
+        if warn:
+            st.info(warn)
 
         with st.form("create_customer_form", clear_on_submit=False):
             name = st.text_input("Customer name", key="new_name", placeholder="e.g., ACME BV")
 
-            # address inputs (dinamik)
+            # address inputs (dynamic)
             ss.setdefault("new_addr_count", 1)
             col_a, col_b = st.columns([1, 1])
             add_addr = col_a.form_submit_button("Add another address")
@@ -128,7 +137,6 @@ def page_add_customer():
                 ss.new_addr_count += 1
             if reset_addr:
                 ss.new_addr_count = 1
-                # form alanlarını temizleyelim
                 for k in list(ss.keys()):
                     if str(k).startswith("new_addr_"):
                         del ss[k]
@@ -157,13 +165,19 @@ def page_add_customer():
                     ss.create_success_cid = cid
                     st.toast("Customer created", icon="✅")
 
-        # kalıcı success alanı (form dışı, flicker yapmaz)
         if ss.create_success_cid:
             st.success(f"✅ Customer saved (ID: {ss.create_success_cid})")
+            warn = get_last_warning()
+            if warn:
+                st.info(warn)
 
     # ------------------------- EDIT / DELETE -------------------------
     with tab_edit:
         catalog = load_catalog()
+        warn = get_last_warning()
+        if warn:
+            st.info(warn)
+
         customers = _get_customers(catalog)
         choices = _customers_to_choices(customers)
 
@@ -193,9 +207,8 @@ def page_add_customer():
             st.markdown("**Addresses**")
             addrs: List[str] = list(map(str, cust.get("addresses", [])))
 
-            # silme checkbox state’leri
-            # (form içinde de stabil kalsın diye uzun anahtarlar kullanıyoruz)
             key_prefix = f"ed_{cid}_"
+            # delete flags
             ss.setdefault(key_prefix + "addr_del_flags", [False] * len(addrs))
             if len(ss[key_prefix + "addr_del_flags"]) != len(addrs):
                 ss[key_prefix + "addr_del_flags"] = [False] * len(addrs)
@@ -222,7 +235,7 @@ def page_add_customer():
                 if v:
                     new_lines.append(v.strip())
 
-            # ---------- warehouses (WH) linking ----------
+            # ---------- warehouses linking ----------
             st.markdown("**Linked Warehouses**")
             all_wids = list_warehouse_ids(catalog)  # ["netherlands_svz", ...]
             current_whs: List[str] = list(map(str, cust.get("warehouses", [])))
@@ -237,7 +250,6 @@ def page_add_customer():
             save_clicked = col_save.form_submit_button("Save changes", type="primary")
             delete_clicked = col_delete.form_submit_button("Delete customer")
 
-        # --------- edit result handling (form dışı kalıcı mesajlar) ---------
         if save_clicked:
             edited_addrs: List[str] = []
             for i in range(len(addrs)):
@@ -253,22 +265,24 @@ def page_add_customer():
                 "id": cid,
                 "name": (st.session_state.get("edit_name") or "").strip() or cid,
                 "addresses": edited_addrs,
-                "warehouses": selected_whs,  # NEW: link warehouses
+                "warehouses": selected_whs,
             }
             catalog = _save_customer_obj(catalog, updated)
             save_catalog(catalog)
             ss.edit_success = True
             st.toast("Customer saved", icon="✅")
 
-            # yeni adres satırı sayaçlarını sıfırla
+            # reset temp new address inputs
             ss[key_prefix + "new_addr_count"] = 0
-            # geçici yeni adres alanlarını temizle
             for k in list(ss.keys()):
                 if str(k).startswith(key_prefix + "new_addr_line_"):
                     del ss[k]
 
         if ss.edit_success:
             st.success("✅ Customer saved")
+            warn = get_last_warning()
+            if warn:
+                st.info(warn)
 
         if delete_clicked:
             with st.popover("Confirm deletion"):
