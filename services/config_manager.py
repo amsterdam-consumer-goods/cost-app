@@ -295,22 +295,31 @@ def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict
     c = json.loads(json.dumps(catalog))
     customers = c.get("customers")
     cid = gen_customer_id(payload.get("name", "customer"), c)
-    record = {
+    
+    # Base record without id
+    base_record = {
         "name": payload.get("name", cid),
         "addresses": payload.get("addresses", []),
-        "id": cid,
         **({k: v for k, v in payload.items() if k not in {"name", "addresses", "id"}}),
     }
+    
     if customers is None:
-        c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
+        # Initialize as dict
+        c["customers"] = {cid: base_record}
         return c, cid
+    
     if isinstance(customers, dict):
-        customers[cid] = {k: v for k, v in record.items() if k != "id"}
+        # Dict storage: id is the key, not in value
+        customers[cid] = base_record
         return c, cid
+    
     if isinstance(customers, list):
-        customers.append(record)
+        # List storage: NO id field to match existing format
+        customers.append(base_record)
         return c, cid
-    c["customers"] = {cid: {k: v for k, v in record.items() if k != "id"}}
+    
+    # Fallback: initialize as dict
+    c["customers"] = {cid: base_record}
     return c, cid
 
 def list_customers(catalog: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
