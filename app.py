@@ -18,11 +18,22 @@ if str(ROOT) not in sys.path:
 # Force reload of our local modules to avoid Cloud caching issues
 import importlib
 for module_name in ['services', 'services.catalog', 'services.catalog_adapter', 
+                     'services.config_manager',  # CRITICAL: Add config_manager
                      'warehouses', 'warehouses.final_calc', 'warehouses.second_leg', 'warehouses.generic']:
     if module_name in sys.modules:
         del sys.modules[module_name]
 
 import streamlit as st
+
+# Clear Streamlit cache when switching between admin and user modes
+if "last_mode" not in st.session_state:
+    st.session_state.last_mode = None
+
+current_mode = "admin" if st.session_state.get("is_admin") else "user"
+if st.session_state.last_mode != current_mode:
+    st.session_state.last_mode = current_mode
+    # Clear cache when switching modes to force fresh data load
+    st.cache_data.clear()
 
 # Now import our modules
 from services.catalog import load as load_catalog
@@ -61,6 +72,8 @@ if not st.session_state.is_admin:
         if ADMIN_PASSWORD and admin_pw == str(ADMIN_PASSWORD):
             st.session_state.is_admin = True
             st.sidebar.success("✅ Admin access granted")
+            # Clear cache when entering admin mode
+            st.cache_data.clear()
             st.rerun()
         else:
             st.sidebar.error("❌ Wrong password")
@@ -68,6 +81,8 @@ else:
     st.sidebar.success("🟢 Logged in as Admin")
     if st.sidebar.button("Logout Admin", use_container_width=True, key="admin_logout_btn"):
         st.session_state.is_admin = False
+        # Clear cache when exiting admin mode
+        st.cache_data.clear()
         st.rerun()
 
 # Admin panel (tek seçimli menü: RADIO)
@@ -195,7 +210,9 @@ def _dispatch(
         pallet_unit_cost=pallet_unit_cost,
     )
 
-if st.button("🔄 Refresh warehouses list"):
+# CRITICAL: Add refresh button to clear cache and reload customers
+if st.button("🔄 Refresh data"):
+    st.cache_data.clear()
     st.rerun()
 
 if st.session_state.step == "inputs":
