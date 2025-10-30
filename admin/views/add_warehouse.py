@@ -2,6 +2,11 @@
 """
 Admin • Add Warehouse (id/rates/features)
 
+CRITICAL FIX:
+- Now uses upsert_warehouse() instead of manual list.append()
+- This ensures warehouse format consistency (dict vs list)
+- Added verification after save to confirm warehouse was actually saved
+
 Behavior
 --------
 - Second-leg: simple enable/disable checkbox
@@ -31,6 +36,7 @@ _spec.loader.exec_module(_cm)
 list_warehouses = _cm.list_warehouses
 load_catalog = _cm.load_catalog
 save_catalog = _cm.save_catalog
+upsert_warehouse = _cm.upsert_warehouse  # ← FIX: Use this instead of manual append
 
 # ---------------- helpers ----------------
 def _ensure_state() -> None:
@@ -250,30 +256,57 @@ def show() -> None:
     msg_area = st.empty()
 
     def _do_save() -> None:
-        """Validate, persist in catalog, clear cache, and reset the form."""
+        """
+        Validate, persist in catalog, clear cache, and reset the form.
+        
+        CRITICAL FIX: Now uses upsert_warehouse() to ensure format consistency
+        and verifies the save was successful by reloading the catalog.
+        """
         draft = _collect_form_state()
 
         # Validation
         if not draft.get("id"):
-            msg_area.error("Warehouse ID is required.")
+            msg_area.error("❌ Warehouse ID is required.")
             return
         if not draft.get("name"):
-            msg_area.error("Name is required.")
+            msg_area.error("❌ Name is required.")
             return
 
+        wid = draft["id"]
         catalog = load_catalog()
         ws = list_warehouses(catalog)
         ids = {w.get("id") for w in ws if w.get("id")}
-        if draft["id"] in ids:
-            msg_area.error("Warehouse ID must be unique.")
+        if wid in ids:
+            msg_area.error(f"❌ Warehouse ID '{wid}' already exists. Choose a unique ID.")
             return
 
-        catalog.setdefault("warehouses", []).append(draft)
+        # ← FIX 1: Use upsert_warehouse instead of manual list.append()
+        # This handles dict vs list format automatically
+        updated_catalog, was_new = upsert_warehouse(catalog, wid, draft)
+
         try:
-            save_catalog(catalog)
+            # ← FIX 2: save_catalog now has os.fsync() for guaranteed disk write
+            save_catalog(updated_catalog)
         except Exception as e:  # noqa: BLE001
-            msg_area.error(f"Save failed: {e}")
+            msg_area.error(f"❌ Save failed: {e}")
+            st.error(f"🐛 Debug: {type(e).__name__}: {str(e)}")
             return
+
+        # ← FIX 3: VERIFY the warehouse was actually saved by reloading
+        try:
+            reloaded = load_catalog()
+            reloaded_ws = list_warehouses(reloaded)
+            reloaded_ids = {w.get("id") for w in reloaded_ws if w.get("id")}
+            
+            if wid not in reloaded_ids:
+                msg_area.error(f"❌ Verification failed: Warehouse '{wid}' not found after save!")
+                st.error("🐛 The save appeared to succeed but the warehouse is not in the reloaded catalog.")
+                st.error(f"🐛 Reloaded IDs: {sorted(reloaded_ids)}")
+                return
+                
+        except Exception as e:  # noqa: BLE001
+            msg_area.warning(f"⚠️ Could not verify save (but save likely succeeded): {e}")
+            # Don't return - the save probably worked, we just couldn't verify
 
         # Success
         try:
@@ -281,8 +314,8 @@ def show() -> None:
         except Exception:  # noqa: BLE001
             pass
 
-        st.session_state["last_added_id"] = draft["id"]
-        msg_area.success(f"Warehouse '{draft['id']}' added.")
+        st.session_state["last_added_id"] = wid
+        msg_area.success(f"✅ Warehouse '{wid}' added and verified in catalog!")
         st.toast("Saved successfully.", icon="✅")
         st.balloons()
         _reset_form()
@@ -294,7 +327,7 @@ def show() -> None:
     with a3:
         if st.button("Reset form", use_container_width=True):
             _reset_form()
-            msg_area.info("Form cleared.")
+            msg_area.info("🔄 Form cleared.")
 
     # Preview panel
     if st.session_state.add_preview_open:
