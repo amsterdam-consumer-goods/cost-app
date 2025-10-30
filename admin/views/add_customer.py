@@ -106,8 +106,9 @@ def page_add_customer():
 
     # Show any backend warning (e.g., Gist fallback)
     warn = get_last_warning()
-    if warn:
+    if warn and not st.session_state.get("warn_shown_add_customer"):
         st.info(warn)
+        st.session_state["warn_shown_add_customer"] = True
 
     # Persistent flags
     ss = st.session_state
@@ -119,7 +120,9 @@ def page_add_customer():
 
     # ------------------------- CREATE -------------------------
     with tab_create:
+        # FRESH LOAD - Her zaman güncel catalog'u yükle
         catalog = load_catalog()
+        
         # Re-show backend warning if any (e.g., after rerun)
         warn = get_last_warning()
         if warn:
@@ -135,11 +138,13 @@ def page_add_customer():
             reset_addr = col_b.form_submit_button("Reset addresses")
             if add_addr:
                 ss.new_addr_count += 1
+                st.rerun()
             if reset_addr:
                 ss.new_addr_count = 1
                 for k in list(ss.keys()):
                     if str(k).startswith("new_addr_"):
                         del ss[k]
+                st.rerun()
 
             addresses: List[str] = []
             for i in range(ss.new_addr_count):
@@ -160,19 +165,34 @@ def page_add_customer():
                 if not addresses_clean:
                     st.error("Please enter at least one address line.")
                 else:
+                    # Fresh catalog load before saving
+                    catalog = load_catalog()
                     catalog, cid = cm_add_customer(catalog, {"name": name.strip(), "addresses": addresses_clean})
                     save_catalog(catalog)
+                    
+                    # Clear form inputs
                     ss.create_success_cid = cid
-                    st.toast("Customer created", icon="✅")
+                    ss.new_addr_count = 1
+                    for k in list(ss.keys()):
+                        if str(k).startswith("new_addr_") or k == "new_name":
+                            del ss[k]
+                    
+                    st.toast("✅ Customer created", icon="✅")
+                    st.rerun()
 
         if ss.create_success_cid:
             st.success(f"✅ Customer saved (ID: {ss.create_success_cid})")
             warn = get_last_warning()
             if warn:
                 st.info(warn)
+            # Clear success message after showing
+            if st.button("Clear message"):
+                ss.create_success_cid = ""
+                st.rerun()
 
     # ------------------------- EDIT / DELETE -------------------------
     with tab_edit:
+        # FRESH LOAD - Her zaman güncel catalog'u yükle
         catalog = load_catalog()
         warn = get_last_warning()
         if warn:
@@ -185,6 +205,15 @@ def page_add_customer():
             st.info("No customers yet. Create one in the first tab.")
             return
 
+        # CRITICAL FIX: Reset selected customer on catalog change
+        if "edit_customer_choices_hash" not in ss:
+            ss.edit_customer_choices_hash = str(choices)
+        elif ss.edit_customer_choices_hash != str(choices):
+            # Customer list changed, reset selection
+            ss.edit_customer_choices_hash = str(choices)
+            if "selected_customer_cid" in ss:
+                del ss.selected_customer_cid
+
         cid = st.selectbox(
             "Select customer",
             options=[c[0] for c in choices],
@@ -192,6 +221,7 @@ def page_add_customer():
             key="selected_customer_cid"
         )
 
+        # FRESH LOAD of customer data based on selection
         cust = _get_customer_by_id(catalog, cid)
         if not cust:
             st.error("Customer not found (maybe deleted).")
@@ -200,7 +230,7 @@ def page_add_customer():
         with st.form("edit_customer_form", clear_on_submit=False):
             st.subheader("Customer Information")
 
-            # name
+            # name - CRITICAL: Use cust.get() directly, not session_state
             name = st.text_input("Name", value=cust.get("name", cid), key="edit_name")
 
             # addresses (edit + delete)
@@ -208,9 +238,14 @@ def page_add_customer():
             addrs: List[str] = list(map(str, cust.get("addresses", [])))
 
             key_prefix = f"ed_{cid}_"
-            # delete flags
-            ss.setdefault(key_prefix + "addr_del_flags", [False] * len(addrs))
-            if len(ss[key_prefix + "addr_del_flags"]) != len(addrs):
+            # CRITICAL FIX: Reset delete flags when customer changes
+            if f"{key_prefix}last_cid" not in ss or ss[f"{key_prefix}last_cid"] != cid:
+                ss[f"{key_prefix}last_cid"] = cid
+                ss[key_prefix + "addr_del_flags"] = [False] * len(addrs)
+                ss[key_prefix + "new_addr_count"] = 0
+            
+            # Ensure flags list matches current addresses
+            if len(ss.get(key_prefix + "addr_del_flags", [])) != len(addrs):
                 ss[key_prefix + "addr_del_flags"] = [False] * len(addrs)
 
             for i, a in enumerate(addrs):
@@ -224,6 +259,7 @@ def page_add_customer():
             ss.setdefault(key_prefix + "new_addr_count", 0)
             if st.form_submit_button("Add another address line"):
                 ss[key_prefix + "new_addr_count"] += 1
+                st.rerun()
 
             new_lines: List[str] = []
             for i in range(ss[key_prefix + "new_addr_count"]):
@@ -237,7 +273,7 @@ def page_add_customer():
 
             # ---------- warehouses linking ----------
             st.markdown("**Linked Warehouses**")
-            all_wids = list_warehouse_ids(catalog)  # ["netherlands_svz", ...]
+            all_wids = list_warehouse_ids(catalog)
             current_whs: List[str] = list(map(str, cust.get("warehouses", [])))
             selected_whs = st.multiselect(
                 "Select warehouses for this customer",
@@ -267,22 +303,31 @@ def page_add_customer():
                 "addresses": edited_addrs,
                 "warehouses": selected_whs,
             }
+            
+            # Fresh catalog load before saving
+            catalog = load_catalog()
             catalog = _save_customer_obj(catalog, updated)
             save_catalog(catalog)
-            ss.edit_success = True
-            st.toast("Customer saved", icon="✅")
-
-            # reset temp new address inputs
+            
+            # Clear temp flags
             ss[key_prefix + "new_addr_count"] = 0
             for k in list(ss.keys()):
                 if str(k).startswith(key_prefix + "new_addr_line_"):
                     del ss[k]
+            
+            ss.edit_success = True
+            st.toast("✅ Customer saved", icon="✅")
+            st.rerun()
 
         if ss.edit_success:
             st.success("✅ Customer saved")
             warn = get_last_warning()
             if warn:
                 st.info(warn)
+            # Clear success flag
+            if st.button("Clear message", key="clear_edit_success"):
+                ss.edit_success = False
+                st.rerun()
 
         if delete_clicked:
             with st.popover("Confirm deletion"):
@@ -290,10 +335,16 @@ def page_add_customer():
                 confirm = st.checkbox("I understand, delete this customer.")
                 really = st.button("Confirm delete", type="primary", disabled=not confirm)
                 if really:
+                    # Fresh catalog load before deleting
                     catalog = load_catalog()
                     catalog = _delete_customer_by_id(catalog, cid)
                     save_catalog(catalog)
+                    
+                    # Clear all customer-related session state
+                    for k in list(ss.keys()):
+                        if str(k).startswith(f"ed_{cid}_") or k == "selected_customer_cid":
+                            del ss[k]
+                    
                     ss.delete_success = True
-                    st.toast("Customer deleted", icon="🗑️")
-                    st.success("🗑️ Customer deleted")
-                    st.experimental_rerun()
+                    st.toast("🗑️ Customer deleted", icon="🗑️")
+                    st.rerun()

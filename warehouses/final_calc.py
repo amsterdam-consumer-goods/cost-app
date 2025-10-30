@@ -43,6 +43,10 @@ def _safe_read_json(path: str):
         return None
 
 def _load_customers_from_catalog() -> tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    CRITICAL FIX: Remove @st.cache_data to always load fresh customer data.
+    This ensures newly added customers appear immediately in the dropdown.
+    """
     try:
         from services.catalog import load as load_catalog, path as catalog_path
         from services.catalog_adapter import normalize_catalog
@@ -241,6 +245,7 @@ def _get_addresses_for(data: List[Dict[str, Any]], customer: str) -> List[str]:
 def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     st.subheader("Final Calculator")
 
+    # CRITICAL FIX: Always load fresh customer data (no caching)
     rows, catalog_source = _load_customers_from_catalog()
     used_source: Optional[str] = None
     if rows:
@@ -254,13 +259,35 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
         used_source = os.path.abspath("data/customers.json")
 
     customers = _get_customers(rows)
-    customer = st.selectbox("Customer", ["-- Select --"] + customers, index=0) if customers else None
+    
+    # CRITICAL FIX: Reset customer selection when list changes
+    if "final_calc_customers_hash" not in st.session_state:
+        st.session_state["final_calc_customers_hash"] = str(customers)
+    elif st.session_state["final_calc_customers_hash"] != str(customers):
+        # Customer list changed, reset selection
+        st.session_state["final_calc_customers_hash"] = str(customers)
+        if "final_calc_selected_customer" in st.session_state:
+            del st.session_state["final_calc_selected_customer"]
+        if "final_calc_selected_warehouse" in st.session_state:
+            del st.session_state["final_calc_selected_warehouse"]
+    
+    customer = st.selectbox(
+        "Customer", 
+        ["-- Select --"] + customers, 
+        index=0,
+        key="final_calc_selected_customer"
+    ) if customers else None
 
     customer_wh = None
     if customer and customer != "-- Select --":
         addrs = _get_addresses_for(rows, customer)
         if addrs:
-            customer_wh = st.selectbox("Customer Warehouse", ["-- Select --"] + addrs, index=0)
+            customer_wh = st.selectbox(
+                "Customer Warehouse", 
+                ["-- Select --"] + addrs, 
+                index=0,
+                key="final_calc_selected_warehouse"
+            )
         else:
             st.warning("No warehouse address found for the selected customer.")
 
