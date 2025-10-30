@@ -42,14 +42,24 @@ def _safe_read_json(path: str):
         st.error(f"Could not read JSON file.\n\nError: {e}")
         return None
 
-def _load_customers_from_catalog() -> tuple[List[Dict[str, Any]], Optional[str]]:
+def _get_catalog_mtime() -> float:
+    """Get catalog file modification time for cache busting."""
+    try:
+        from services.config_manager import get_catalog_path
+        catalog_path = get_catalog_path()
+        if catalog_path.exists():
+            return os.path.getmtime(str(catalog_path))
+        return 0.0
+    except Exception:
+        return 0.0
+
+@st.cache_data(show_spinner=False, ttl=60)  # Short TTL: 1 minute
+def _load_customers_cached(mtime: float) -> tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    CRITICAL FIX: Use config_manager.list_customers() instead of catalog.load()
-    This ensures customers from BOTH dict and list storage formats are loaded correctly.
-    NO CACHING - always fresh data.
+    CRITICAL: Cache is keyed by file mtime, so it refreshes when catalog changes.
+    Short TTL ensures fresh data even if mtime doesn't update.
     """
     try:
-        # CRITICAL: Import from config_manager, not catalog
         from services.config_manager import list_customers, get_catalog_path
         
         # Get fresh customer list
@@ -73,6 +83,13 @@ def _load_customers_from_catalog() -> tuple[List[Dict[str, Any]], Optional[str]]
     except Exception as e:
         st.error(f"Error loading customers: {e}")
         return [], None
+
+def _load_customers_from_catalog() -> tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Load customers with cache busting based on file modification time.
+    """
+    mtime = _get_catalog_mtime()
+    return _load_customers_cached(mtime)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 FR_JSON_PATH = BASE_DIR / "data" / "fr_delivery_rates.json"
@@ -240,7 +257,7 @@ def _get_addresses_for(data: List[Dict[str, Any]], customer: str) -> List[str]:
 def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
     st.subheader("Final Calculator")
 
-    # CRITICAL FIX: Always load fresh customer data using config_manager
+    # CRITICAL FIX: Load with mtime-based cache busting
     rows, catalog_source = _load_customers_from_catalog()
     used_source: Optional[str] = None
     
@@ -259,16 +276,9 @@ def final_calculator(pieces: int, vvp_cost_per_piece_rounded: float):
 
     customers = _get_customers(rows)
     
-    # CRITICAL FIX: Reset customer selection when list changes
-    if "final_calc_customers_hash" not in st.session_state:
-        st.session_state["final_calc_customers_hash"] = str(customers)
-    elif st.session_state["final_calc_customers_hash"] != str(customers):
-        # Customer list changed, reset selection
-        st.session_state["final_calc_customers_hash"] = str(customers)
-        if "final_calc_selected_customer" in st.session_state:
-            del st.session_state["final_calc_selected_customer"]
-        if "final_calc_selected_warehouse" in st.session_state:
-            del st.session_state["final_calc_selected_warehouse"]
+    # Show debug info (optional - remove in production)
+    if st.session_state.get("show_debug"):
+        st.caption(f"🔍 Debug: Found {len(customers)} customers | mtime: {_get_catalog_mtime()}")
     
     customer = st.selectbox(
         "Customer", 
