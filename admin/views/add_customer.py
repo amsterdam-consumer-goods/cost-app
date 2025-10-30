@@ -222,16 +222,30 @@ def page_add_customer():
         )
 
         # FRESH LOAD of customer data based on selection
+        # CRITICAL: Clear form state when customer changes
+        if "last_edited_cid" not in ss or ss.last_edited_cid != cid:
+            ss.last_edited_cid = cid
+            # Clear all edit-related keys for the old customer
+            for k in list(ss.keys()):
+                if k.startswith("ed_") and not k.startswith(f"ed_{cid}_"):
+                    del ss[k]
+        
         cust = _get_customer_by_id(catalog, cid)
         if not cust:
             st.error("Customer not found (maybe deleted).")
             return
 
-        with st.form("edit_customer_form", clear_on_submit=False):
+        # CRITICAL FIX: Use unique form key per customer to force reset
+        with st.form(f"edit_customer_form_{cid}", clear_on_submit=False):
             st.subheader("Customer Information")
 
-            # name - CRITICAL: Use cust.get() directly, not session_state
-            name = st.text_input("Name", value=cust.get("name", cid), key="edit_name")
+            # CRITICAL FIX: Dynamic key that changes with customer selection
+            # This forces Streamlit to create a new widget with fresh value
+            name = st.text_input(
+                "Name", 
+                value=cust.get("name", cid), 
+                key=f"edit_name_{cid}"
+            )
 
             # addresses (edit + delete)
             st.markdown("**Addresses**")
@@ -250,9 +264,16 @@ def page_add_customer():
 
             for i, a in enumerate(addrs):
                 cols = st.columns([8, 2])
-                cols[0].text_input(f"Address #{i+1}", value=a, key=f"{key_prefix}addr_{i}")
+                # CRITICAL: Use customer-specific keys for addresses too
+                cols[0].text_input(
+                    f"Address #{i+1}", 
+                    value=a, 
+                    key=f"{key_prefix}addr_{i}"
+                )
                 ss[key_prefix + "addr_del_flags"][i] = cols[1].checkbox(
-                    "Delete", key=f"{key_prefix}del_{i}", value=ss[key_prefix + "addr_del_flags"][i]
+                    "Delete", 
+                    key=f"{key_prefix}del_{i}", 
+                    value=ss[key_prefix + "addr_del_flags"][i]
                 )
 
             # new address lines
@@ -279,6 +300,7 @@ def page_add_customer():
                 "Select warehouses for this customer",
                 options=all_wids,
                 default=current_whs,
+                key=f"edit_whs_{cid}",
                 help="These warehouses will be associated with the selected customer."
             )
 
@@ -297,9 +319,12 @@ def page_add_customer():
                 if nl:
                     edited_addrs.append(nl)
 
+            # CRITICAL: Get name from the customer-specific key
+            edited_name = st.session_state.get(f"edit_name_{cid}", cust.get("name", cid)).strip()
+
             updated = {
                 "id": cid,
-                "name": (st.session_state.get("edit_name") or "").strip() or cid,
+                "name": edited_name or cid,
                 "addresses": edited_addrs,
                 "warehouses": selected_whs,
             }
@@ -335,7 +360,7 @@ def page_add_customer():
             
             # Clear all customer-related session state
             for k in list(ss.keys()):
-                if str(k).startswith(f"ed_{cid}_") or k == "selected_customer_cid" or k == "edit_customer_choices_hash":
+                if str(k).startswith(f"ed_{cid}_") or k == "selected_customer_cid" or k == "edit_customer_choices_hash" or k == "last_edited_cid":
                     del ss[k]
             
             st.toast("🗑️ Customer deleted", icon="🗑️")
