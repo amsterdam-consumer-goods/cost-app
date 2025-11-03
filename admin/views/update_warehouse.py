@@ -344,3 +344,20 @@ def page_update_warehouse():
 
 def view():
     page_update_warehouse()
+
+# ====== DEBUG: CATALOG PATH ======
+    st.markdown("---")
+    st.subheader("🔍 DEBUG INFO")
+    from services.config_manager import get_catalog_path
+    catalog_path = get_catalog_path()
+    st.code(f"Catalog file location:\n{catalog_path}")
+    
+    # Check if file exists and show content
+    if catalog_path.exists():
+        st.success("✅ File exists!")
+        import json
+        with open(catalog_path, 'r') as f:
+            data = json.load(f)
+        st.json(data)
+    else:
+        st.error("❌ File does NOT exist!")
