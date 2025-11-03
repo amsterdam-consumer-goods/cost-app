@@ -1,31 +1,23 @@
-# services/catalog_adapter.py
 """
-Minimal identity adapter.
-- normalize_catalog / normalize_wh pass data mostly unchanged
-- Adds safe defaults for missing keys
+Catalog adapter: normalize old/new formats for backward compatibility.
 """
+
 from __future__ import annotations
 from typing import Any, Dict, List
+from services.config_manager import load_catalog, list_warehouses
 
-def normalize_wh(wh: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a warehouse dictionary with all required keys safely set."""
-    out: Dict[str, Any] = dict(wh) if isinstance(wh, dict) else {}
-    out.setdefault("id", out.get("name", "warehouse"))
-    out.setdefault("name", out.get("id", "Warehouse"))
-    out.setdefault("country", out.get("country", ""))
-    out.setdefault(
-        "rates",
-        out.get(
-            "rates",
-            {"inbound": 0.0, "outbound": 0.0, "storage": 0.0, "order_fee": 0.0},
-        ),
-    )
-    out.setdefault("features", out.get("features", {}))
-    return out
-
-def normalize_catalog(catalog: Dict[str, Any]) -> Dict[str, Any]:
-    """Return catalog with normalized warehouse records."""
-    out: Dict[str, Any] = dict(catalog) if isinstance(catalog, dict) else {}
-    whs: List[Dict[str, Any]] = out.get("warehouses", []) or []
-    out["warehouses"] = [normalize_wh(w) for w in whs]
-    return out
+def normalize_catalog(catalog: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    Normalize catalog structure to always return dict with 'warehouses' list.
+    If catalog is None, loads from config_manager.
+    """
+    if catalog is None:
+        catalog = load_catalog()
+    
+    # Use config_manager's list_warehouses for consistent normalization
+    warehouses = list_warehouses(catalog)
+    
+    return {
+        "warehouses": warehouses,
+        "customers": catalog.get("customers", {}),
+    }
