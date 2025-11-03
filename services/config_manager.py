@@ -335,3 +335,47 @@ def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
         if str(w.get("id")) == wid:
             return w
     return None
+
+def upsert_warehouse(catalog: Dict[str, Any], wid: str, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    """Update or insert a warehouse. Returns (updated_catalog, was_new)."""
+    c = json.loads(json.dumps(catalog))
+    ws = c.get("warehouses", [])
+    
+    if not isinstance(ws, list):
+        ws = []
+        c["warehouses"] = ws
+    
+    # Try to find and update existing
+    was_new = True
+    for i, itm in enumerate(ws):
+        if isinstance(itm, dict) and str(itm.get("id", "")) == str(wid):
+            ws[i] = payload
+            was_new = False
+            break
+    
+    # If not found, append
+    if was_new:
+        if isinstance(payload, dict):
+            payload["id"] = str(wid)
+        ws.append(payload)
+    
+    return c, was_new
+
+def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    """Add a customer. Returns (updated_catalog, customer_id)."""
+    c = json.loads(json.dumps(catalog))
+    customers = c.get("customers", [])
+    
+    if not isinstance(customers, list):
+        customers = []
+        c["customers"] = customers
+    
+    cid = gen_customer_id(payload.get("name", "customer"), c)
+    
+    base_record = {
+        "name": payload.get("name", cid),
+        "addresses": payload.get("addresses", []),
+    }
+    
+    customers.append(base_record)
+    return c, cid
