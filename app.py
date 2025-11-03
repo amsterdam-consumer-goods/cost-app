@@ -35,8 +35,8 @@ if st.session_state.last_mode != current_mode:
     # Clear cache when switching modes to force fresh data load
     st.cache_data.clear()
 
-# Now import our modules
-from services.catalog import load as load_catalog
+# Now import our modules - FIX: Use config_manager instead of catalog
+from services.config_manager import load_catalog
 from services.catalog_adapter import normalize_catalog
 from warehouses.generic import compute_generic
 
