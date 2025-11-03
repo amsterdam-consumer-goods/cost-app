@@ -341,11 +341,7 @@ def page_update_warehouse():
             if st.button("Cancel", use_container_width=True, key=skey("cancel_delete_btn")):
                 st.session_state["__del_confirm__"] = False
 
-
-def view():
-    page_update_warehouse()
-
-# ====== DEBUG: CATALOG PATH ======
+    # ====== DEBUG: CATALOG PATH ======
     st.markdown("---")
     st.subheader("🔍 DEBUG INFO")
     from services.config_manager import get_catalog_path
@@ -361,3 +357,7 @@ def view():
         st.json(data)
     else:
         st.error("❌ File does NOT exist!")
+
+
+def view():
+    page_update_warehouse()
