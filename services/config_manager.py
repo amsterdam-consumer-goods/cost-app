@@ -1,12 +1,9 @@
 # services/config_manager.py
 """
 Single source of truth for loading/saving the catalog and helpers.
-Cloud (GitHub Gist) + automatic local fallback. Never crash UI on 401.
+Cloud (GitHub Gist) as primary source + local cache fallback.
 
-This module also exposes backward-compat helpers expected by admin views:
-- list_warehouses(source_or_kwargs)
-- get_wh_by_id(source_or_id, wid?) 
-- list_customers(catalog?)
+CRITICAL FIX: Now loads from Gist FIRST on startup, writes to BOTH Gist and local.
 """
 
 from __future__ import annotations
@@ -20,7 +17,7 @@ from typing import Any, Dict, Tuple, List, Optional
 # ------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CATALOG_REL = Path("data/catalog.json")
-_DEF: Dict[str, Any] = {"warehouses": {}, "customers": {}}
+_DEF: Dict[str, Any] = {"warehouses": [], "customers": []}
 
 # UI-readable warning buffer
 _LAST_WARNING: Optional[str] = None
@@ -69,24 +66,39 @@ def _ensure_parent_dir(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
 
 def _write_local_catalog(data: Dict[str, Any]) -> Path:
-    """ALWAYS write to local catalog file with GUARANTEED flush to disk."""
+    """Write to local catalog file with guaranteed flush to disk."""
     path = get_catalog_path()
     _ensure_parent_dir(path)
     tmp = path.with_suffix(".json.tmp")
     
-    # Write to temp file with explicit flush and sync
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-        f.flush()              # ← BUNU EKLE
-        os.fsync(f.fileno())   # ← BUNU EKLE
+        f.flush()
+        os.fsync(f.fileno())
     
     os.replace(tmp, path)
     
-    # Verify the file was written
-    if not path.exists():    # ← BUNU EKLE
-        raise IOError(f"Failed to write catalog to {path}")  # ← BUNU EKLE
+    if not path.exists():
+        raise IOError(f"Failed to write catalog to {path}")
     
     return path
+
+def _read_local_catalog() -> Dict[str, Any]:
+    """Read from local catalog file."""
+    path = get_catalog_path()
+    if not path.exists():
+        return json.loads(json.dumps(_DEF))
+    
+    with path.open("r", encoding="utf-8") as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            return json.loads(json.dumps(_DEF))
+    
+    data.setdefault("warehouses", [])
+    data.setdefault("customers", [])
+    return data
+
 # ------------------------------------------------------------
 # Gist helpers
 # ------------------------------------------------------------
@@ -110,7 +122,6 @@ def _load_from_gist() -> Dict[str, Any]:
     url = f"https://api.github.com/gists/{_GIST_ID}"
     try:
         r = requests.get(url, headers=_gist_headers(), timeout=15)
-        # treat 401/403/404 as fatal but handled
         if r.status_code in (401, 403, 404):
             raise GistError(f"Gist fetch unauthorized/unavailable (HTTP {r.status_code}).")
         r.raise_for_status()
@@ -120,7 +131,6 @@ def _load_from_gist() -> Dict[str, Any]:
     data = r.json()
     files = data.get("files", {})
     if _GIST_FILENAME not in files or "content" not in files[_GIST_FILENAME]:
-        _save_to_gist(_DEF)
         return json.loads(json.dumps(_DEF))
 
     content = files[_GIST_FILENAME].get("content", "")
@@ -129,10 +139,10 @@ def _load_from_gist() -> Dict[str, Any]:
     try:
         obj = json.loads(content)
     except json.JSONDecodeError:
-        _save_to_gist(_DEF)
-        obj = json.loads(json.dumps(_DEF))
-    obj.setdefault("warehouses", {})
-    obj.setdefault("customers", {})
+        return json.loads(json.dumps(_DEF))
+    
+    obj.setdefault("warehouses", [])
+    obj.setdefault("customers", [])
     return obj
 
 def _save_to_gist(payload: Dict[str, Any]) -> None:
@@ -150,52 +160,60 @@ def _save_to_gist(payload: Dict[str, Any]) -> None:
         raise GistError(f"Gist save error: {e}")
 
 # ------------------------------------------------------------
-# Public API (load/save) with safe fallback
+# Public API (load/save)
 # ------------------------------------------------------------
 def load_catalog() -> Dict[str, Any]:
     """
-    CRITICAL: Always load from LOCAL file, not Gist.
-    This ensures we see the latest changes immediately.
+    CRITICAL FIX: Load from Gist FIRST, fallback to local cache.
+    This ensures data persists across Streamlit restarts.
     """
-    path = get_catalog_path()
-    if not path.exists():
-        _ensure_parent_dir(path)
-        _write_local_catalog(_DEF)
-        return json.loads(json.dumps(_DEF))
+    global _GIST_DISABLED_RUNTIME
     
-    with path.open("r", encoding="utf-8") as f:
+    # STEP 1: Try to load from Gist (primary source)
+    if _can_use_gist():
         try:
-            data = json.load(f)
-        except json.JSONDecodeError:
-            backup = path.with_suffix(".corrupt.json")
-            path.rename(backup)
-            _write_local_catalog(_DEF)
-            data = json.loads(json.dumps(_DEF))
+            data = _load_from_gist()
+            # Cache to local for faster subsequent reads
+            _write_local_catalog(data)
+            return data
+        except GistError as e:
+            _GIST_DISABLED_RUNTIME = True
+            _set_warning(f"Cloud storage unavailable: {e}. Using local cache.")
+        except Exception as e:
+            _GIST_DISABLED_RUNTIME = True
+            _set_warning(f"Unexpected error loading from cloud: {e}. Using local cache.")
     
-    data.setdefault("warehouses", {})
-    data.setdefault("customers", {})
+    # STEP 2: Fallback to local cache
+    data = _read_local_catalog()
+    
+    # STEP 3: If local is empty and Gist is available, initialize Gist
+    if not data.get("warehouses") and not data.get("customers") and _can_use_gist():
+        try:
+            _save_to_gist(_DEF)
+        except Exception:
+            pass
+    
     return data
 
 def save_catalog(data: Dict[str, Any]) -> Path:
     """
-    CRITICAL: ALWAYS write to local file first.
-    Then optionally try to sync to Gist (but don't fail if Gist fails).
+    CRITICAL: Save to BOTH Gist (primary) and local (cache).
     """
     global _GIST_DISABLED_RUNTIME
     
-    # STEP 1: ALWAYS write to local file (guaranteed success)
-    local_path = _write_local_catalog(data)
-    
-    # STEP 2: Optionally try to sync to Gist (best effort)
+    # STEP 1: Save to Gist first (primary storage)
     if _can_use_gist():
         try:
             _save_to_gist(data)
         except GistError as e:
             _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage sync failed: {e}. Data saved locally.")
+            _set_warning(f"Cloud storage sync failed: {e}. Data saved locally only.")
         except Exception as e:
             _GIST_DISABLED_RUNTIME = True
-            _set_warning(f"Cloud storage unexpected error: {e}. Data saved locally.")
+            _set_warning(f"Cloud storage error: {e}. Data saved locally only.")
+    
+    # STEP 2: Always save to local as cache
+    local_path = _write_local_catalog(data)
     
     return local_path
 
@@ -225,180 +243,61 @@ def unique_id(base: str, existing: set[str]) -> str:
     return f"{base}_{i}"
 
 def _existing_customer_ids(customers: Any) -> set[str]:
-    if isinstance(customers, dict):
-        return set(map(str, customers.keys()))
     if isinstance(customers, list):
         ids: set[str] = set()
         for it in customers:
             if isinstance(it, dict):
-                cid = it.get("id") or it.get("cid") or it.get("code") or it.get("name")
-                if cid:
-                    ids.add(str(cid))
+                name = it.get("name", "")
+                if name:
+                    ids.add(str(name))
         return ids
     return set()
 
 def gen_customer_id(name: str, catalog: Dict[str, Any]) -> str:
-    customers = catalog.get("customers", {})
+    customers = catalog.get("customers", [])
     existing = _existing_customer_ids(customers)
     return unique_id(name, existing)
 
 def list_warehouse_ids(catalog: Dict[str, Any]) -> list[str]:
-    ws = catalog.get("warehouses")
+    ws = catalog.get("warehouses", [])
+    if not isinstance(ws, list):
+        return []
     ids: list[str] = []
-    if isinstance(ws, dict):
-        ids = [str(k) for k in ws.keys()]
-    elif isinstance(ws, list):
-        for idx, itm in enumerate(ws):
-            if isinstance(itm, dict):
-                wid = itm.get("id") or itm.get("code") or itm.get("name") or str(idx)
+    for itm in ws:
+        if isinstance(itm, dict):
+            wid = itm.get("id", "")
+            if wid:
                 ids.append(str(wid))
-            else:
-                ids.append(str(idx))
-    else:
-        ids = []
     return sorted(set(ids), key=lambda s: s.lower())
 
 def get_warehouse(catalog: Dict[str, Any], wid: str) -> Dict[str, Any]:
-    ws = catalog.get("warehouses", {})
-    if isinstance(ws, dict):
-        return ws.get(wid, {})
+    ws = catalog.get("warehouses", [])
     if isinstance(ws, list):
-        for idx, itm in enumerate(ws):
-            if isinstance(itm, dict):
-                iw = str(itm.get("id") or itm.get("code") or itm.get("name") or idx)
-                if iw == str(wid):
-                    return itm
+        for itm in ws:
+            if isinstance(itm, dict) and str(itm.get("id", "")) == str(wid):
+                return itm
     return {}
 
-def upsert_warehouse(catalog: Dict[str, Any], wid: str, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
-    c = json.loads(json.dumps(catalog))
-    ws = c.get("warehouses")
-    if isinstance(ws, dict) or ws is None:
-        c.setdefault("warehouses", {})
-        was_new = wid not in c["warehouses"]
-        c["warehouses"][wid] = payload
-        return c, was_new
-    if isinstance(ws, list):
-        was_new = True
-        replaced = False
-        for i, itm in enumerate(ws):
-            if isinstance(itm, dict):
-                iw = str(itm.get("id") or itm.get("code") or itm.get("name") or i)
-                if iw == str(wid):
-                    ws[i] = payload
-                    replaced = True
-                    was_new = False
-                    break
-        if not replaced:
-            if isinstance(payload, dict):
-                pl = dict(payload)
-                pl.setdefault("id", str(wid))
-                ws.append(pl)
-            else:
-                ws.append(payload)
-        return c, was_new
-    c["warehouses"] = {wid: payload}
-    return c, True
-
-def add_customer(catalog: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
-    c = json.loads(json.dumps(catalog))
-    customers = c.get("customers")
-    cid = gen_customer_id(payload.get("name", "customer"), c)
-    
-    # Base record without id
-    base_record = {
-        "name": payload.get("name", cid),
-        "addresses": payload.get("addresses", []),
-        **({k: v for k, v in payload.items() if k not in {"name", "addresses", "id"}}),
-    }
-    
-    if customers is None:
-        # Initialize as dict
-        c["customers"] = {cid: base_record}
-        return c, cid
-    
-    if isinstance(customers, dict):
-        # Dict storage: id is the key, not in value
-        customers[cid] = base_record
-        return c, cid
-    
-    if isinstance(customers, list):
-        # List storage: NO id field to match existing format
-        customers.append(base_record)
-        return c, cid
-    
-    # Fallback: initialize as dict
-    c["customers"] = {cid: base_record}
-    return c, cid
-
 def list_customers(catalog: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """Returns a normalized list of customers [{id,name,addresses,...}], independent of dict/list storage."""
     if catalog is None:
         catalog = load_catalog()
-    customers = catalog.get("customers", {})
-    out: List[Dict[str, Any]] = []
-    if isinstance(customers, dict):
-        for cid, obj in customers.items():
-            if isinstance(obj, dict):
-                rec = {"id": str(cid), "name": obj.get("name", str(cid)), "addresses": obj.get("addresses", [])}
-                # keep other fields
-                for k, v in obj.items():
-                    if k not in rec:
-                        rec[k] = v
-                out.append(rec)
-    elif isinstance(customers, list):
-        for it in customers:
-            if isinstance(it, dict):
-                cid = str(it.get("id") or it.get("cid") or it.get("code") or it.get("name") or "")
-                if not cid:
-                    continue
-                rec = {"id": cid, "name": it.get("name", cid), "addresses": it.get("addresses", [])}
-                for k, v in it.items():
-                    if k not in rec:
-                        rec[k] = v
-                out.append(rec)
-    return sorted(out, key=lambda x: x.get("name", "").lower())
+    customers = catalog.get("customers", [])
+    if not isinstance(customers, list):
+        return []
+    return customers
 
-# ------------------------------------------------------------
-# Backward-compat: list_warehouses & get_wh_by_id expected by admin views
-# ------------------------------------------------------------
 def _normalize_wh_list(obj: Any) -> List[Dict[str, Any]]:
-    """Return list of dicts with at least an 'id' key, sorted for UI."""
     if isinstance(obj, dict) and ("warehouses" in obj):
         return _normalize_wh_list(obj["warehouses"])
-    if isinstance(obj, dict):
-        items: List[Dict[str, Any]] = []
-        for wid, data in obj.items():
-            if isinstance(data, dict):
-                item = {"id": str(wid), **data}
-            else:
-                item = {"id": str(wid), "value": data}
-            items.append(item)
-        return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
     if isinstance(obj, list):
         items: List[Dict[str, Any]] = []
-        for idx, itm in enumerate(obj):
-            if isinstance(itm, dict):
-                if "id" not in itm:
-                    if "code" in itm:
-                        itm = {"id": str(itm["code"]), **itm}
-                    elif "name" in itm:
-                        itm = {"id": str(itm["name"]), **itm}
-                    else:
-                        itm = {"id": str(idx), **itm}
+        for itm in obj:
+            if isinstance(itm, dict) and itm.get("id"):
                 items.append(itm)
-            else:
-                items.append({"id": str(idx), "value": itm})
         return sorted(items, key=lambda x: (str(x.get("name") or ""), str(x.get("id") or "")))
     return []
 
 def list_warehouses(*args, **kwargs) -> List[Dict[str, Any]]:
-    """
-    Compat shim used by admin/views/update_warehouse.py:
-    - list_warehouses(catalog_dict)  -> normalized list
-    - list_warehouses(path="...")    -> load JSON then normalize
-    - list_warehouses()              -> load_catalog() then normalize
-    """
     path = kwargs.get("path")
     if len(args) >= 1:
         return _normalize_wh_list(args[0])
@@ -410,12 +309,6 @@ def list_warehouses(*args, **kwargs) -> List[Dict[str, Any]]:
     return _normalize_wh_list(load_catalog())
 
 def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
-    """
-    Compat shim:
-    - get_wh_by_id(wid)
-    - get_wh_by_id(catalog, wid)
-    - get_wh_by_id(path="...")  # not typical, but supported with kwargs
-    """
     path = kwargs.get("path")
     source = None
     wid = None
@@ -439,6 +332,6 @@ def get_wh_by_id(*args, **kwargs) -> Optional[Dict[str, Any]]:
             items = list_warehouses(load_catalog())
 
     for w in items:
-        if str(w.get("id")) == wid or str(w.get("code")) == wid or str(w.get("name")) == wid:
+        if str(w.get("id")) == wid:
             return w
     return None
