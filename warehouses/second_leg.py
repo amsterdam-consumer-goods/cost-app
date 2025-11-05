@@ -56,7 +56,7 @@ LEGACY_TARGET_WAREHOUSE_RATES: dict[str, WhRates] = {
 def _build_targets_from_catalog(primary_label: str) -> dict[str, WhRates]:
     """Build {label -> WhRates} from catalog.json; exclude primary warehouse."""
     try:
-        from services.catalog import load as load_catalog
+        from services.config_manager import load_catalog
         from services.catalog_adapter import normalize_catalog
     except Exception:
         return {}
