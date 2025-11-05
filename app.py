@@ -49,8 +49,13 @@ st.markdown("<style>.stImage img { border-radius: 0 !important; }</style>", unsa
 # -----------------------------------------------------------------------------
 # Passwords
 # -----------------------------------------------------------------------------
-APP_PASSWORD = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD"))
+# Passwords - try secrets first, fallback to environment variables
+try:
+    APP_PASSWORD = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD"))
+    ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD"))
+except Exception:
+    APP_PASSWORD = os.environ.get("APP_PASSWORD")
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 # -----------------------------------------------------------------------------
 # Admin login (sidebar) -> if ok, we render admin panel immediately
