@@ -1,18 +1,35 @@
-# admin/views/add_warehouse.py
 """
-Admin • Add Warehouse (id/rates/features)
+Add Warehouse Page
+==================
 
-CRITICAL FIX:
-- Now uses upsert_warehouse() instead of manual list.append()
-- This ensures warehouse format consistency (dict vs list)
-- Added verification after save to confirm warehouse was actually saved
+Admin interface for creating new warehouses in the system.
 
-Behavior
---------
-- Second-leg: simple enable/disable checkbox
-- Inline save message: appears directly under the action buttons
-- After save: clear Streamlit cache, set `last_added_id`, reset the form
-- No rerun: the message remains visible until the user navigates away or resets
+Features:
+- Basic warehouse information (ID, name)
+- Rate configuration (inbound, outbound, storage, order fee)
+- Feature toggles (labeling, transfer, second leg)
+- Optional advanced labeling (simple/complex labels via checkbox)
+- Standard label_costs for basic configuration
+- Transfer configuration (Excel lookup or fixed cost)
+- Preview before saving
+- Form validation
+
+Labeling Modes:
+- Standard: Label + Labelling costs (basic structure)
+- Advanced (optional): Simple/Complex label options + Labelling
+  - Enabled via checkbox for any warehouse
+  - Provides two-tier pricing system
+
+Usage:
+- Called by admin router
+- Creates new warehouse entries in catalog.json
+- Validates data before saving
+- Clears cache after successful save
+
+Related Files:
+- helpers.py: Shared utilities and UI components
+- update_warehouse.py: Warehouse editing interface
+- services/config_manager.py: Catalog persistence layer
 """
 
 from __future__ import annotations
@@ -25,7 +42,11 @@ import sys
 import importlib.util
 from pathlib import Path
 
-# Manually load config_manager module
+# ============================================================================
+# MODULE IMPORTS
+# ============================================================================
+
+# Manually load config_manager module (avoids sys.path pollution)
 _root = Path(__file__).resolve().parents[2]
 _cm_path = _root / "services" / "config_manager.py"
 _spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
@@ -33,321 +54,553 @@ _cm = importlib.util.module_from_spec(_spec)
 sys.modules["services.config_manager"] = _cm
 _spec.loader.exec_module(_cm)
 
-list_warehouses = _cm.list_warehouses
 load_catalog = _cm.load_catalog
 save_catalog = _cm.save_catalog
-upsert_warehouse = _cm.upsert_warehouse  # ← FIX: Use this instead of manual append
+list_warehouses = _cm.list_warehouses
+upsert_warehouse = _cm.upsert_warehouse
 
-# ---------------- helpers ----------------
-def _ensure_state() -> None:
-    """Initialize session-state flags used on this page."""
-    st.session_state.setdefault("add_preview_open", False)
-
-
-def _reset_form() -> None:
-    """Remove all controlled form keys from session state."""
-    for k in [
-        "wh_id",
-        "wh_name",
-        "rate_inbound",
-        "rate_outbound",
-        "rate_storage",
-        "rate_order_fee",
-        # features
-        "feat_labeling",
-        "feat_transfer",
-        "feat_second_leg_enabled",
-        # labeling extra fields
-        "lab_label",
-        "lab_labelling",
-        # transfer extra fields
-        "transfer_mode_label",
-        "transfer_excel",
-        "transfer_fixed",
-        "transfer_double_stack",
-    ]:
-        if k in st.session_state:
-            del st.session_state[k]
+# Import local helpers
+from .helpers import (
+    default_rates,
+    default_features,
+    has_advanced_labeling,
+    validate_warehouse_data,
+    render_rates_inputs,
+    render_labeling_inputs,
+    render_transfer_inputs,
+)
 
 
-def _collect_form_state() -> Dict[str, Any]:
-    """Return the current draft payload from session state."""
-    features: Dict[str, Any] = {
-        "labeling": bool(st.session_state.get("feat_labeling", False)),
-        "transfer": bool(st.session_state.get("feat_transfer", False)),
-        "second_leg": bool(st.session_state.get("feat_second_leg_enabled", False)),
+# ============================================================================
+# STATE MANAGEMENT
+# ============================================================================
+
+def ensure_session_state() -> None:
+    """Initialize session state flags for this page."""
+    st.session_state.setdefault("add_wh_preview_open", False)
+    st.session_state.setdefault("last_added_id", "")
+
+
+def reset_form() -> None:
+    """Clear all form-related session state keys."""
+    keys_to_clear = [
+        # Basic info
+        "new_wh_id",
+        "new_wh_name",
+        # Rates
+        "new_rate_inbound",
+        "new_rate_outbound",
+        "new_rate_storage",
+        "new_rate_order_fee",
+        # Features
+        "new_feat_labeling",
+        "new_feat_transfer",
+        "new_feat_second_leg",
+        # Labeling - standard
+        "new_label_cost",
+        "new_labelling_cost",
+        # Labeling - SPEDKA
+        "new_label_simple",
+        "new_label_complex",
+        # Transfer
+        "new_transfer_mode",
+        "new_transfer_excel",
+        "new_transfer_fixed",
+        "new_double_stack",
+    ]
+    
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+
+
+# ============================================================================
+# DATA COLLECTION
+# ============================================================================
+
+def collect_form_data() -> Dict[str, Any]:
+    """
+    Collect current form values from session state and build warehouse payload.
+    
+    Returns:
+        Complete warehouse configuration dictionary
+    """
+    warehouse_id = (st.session_state.get("new_wh_id") or "").strip()
+    warehouse_name = (st.session_state.get("new_wh_name") or "").strip()
+    
+    # Rates
+    rates = {
+        "inbound": float(st.session_state.get("new_rate_inbound", 0.0) or 0.0),
+        "outbound": float(st.session_state.get("new_rate_outbound", 0.0) or 0.0),
+        "storage": float(st.session_state.get("new_rate_storage", 0.0) or 0.0),
+        "order_fee": float(st.session_state.get("new_rate_order_fee", 0.0) or 0.0),
     }
-
-    # Labeling details when enabled
-    if features["labeling"]:
-        try:
-            label_val = float(st.session_state.get("lab_label") or 0.0)
-        except Exception:
-            label_val = 0.0
-        try:
-            labelling_val = float(st.session_state.get("lab_labelling") or 0.0)
-        except Exception:
-            labelling_val = 0.0
-        features["label_costs"] = {
-            "label": label_val,
-            "labelling": labelling_val,
-        }
-
-    # Transfer details when enabled
-    if features["transfer"]:
-        mode_label = (st.session_state.get("transfer_mode_label") or "").strip()
-        if mode_label == "Excel file":
+    
+    # Features - base toggles
+    labeling_enabled = bool(st.session_state.get("new_feat_labeling", False))
+    transfer_enabled = bool(st.session_state.get("new_feat_transfer", False))
+    second_leg_enabled = bool(st.session_state.get("new_feat_second_leg", False))
+    
+    features: Dict[str, Any] = {
+        "labeling": labeling_enabled,
+        "transfer": transfer_enabled,
+        "second_leg": second_leg_enabled,
+    }
+    
+    # Labeling details
+    if labeling_enabled:
+        use_advanced = bool(st.session_state.get("new_use_advanced_labels", False))
+        
+        if use_advanced:
+            # Advanced mode: Simple/Complex labels
+            simple = float(st.session_state.get("new_label_simple", 0.0) or 0.0)
+            complex_val = float(st.session_state.get("new_label_complex", 0.0) or 0.0)
+            labelling = float(st.session_state.get("new_labelling_cost", 0.0) or 0.0)
+            
+            features["label_options"] = {
+                "simple": simple,
+                "complex": complex_val,
+            }
+            # Backward compatibility
+            features["label_costs"] = {
+                "label": simple,
+                "labelling": labelling,
+            }
+        else:
+            # Standard mode: Label + Labelling
+            label = float(st.session_state.get("new_label_cost", 0.0) or 0.0)
+            labelling = float(st.session_state.get("new_labelling_cost", 0.0) or 0.0)
+            
+            features["label_costs"] = {
+                "label": label,
+                "labelling": labelling,
+            }
+    
+    # Transfer details
+    if transfer_enabled:
+        transfer_mode = st.session_state.get("new_transfer_mode", "")
+        
+        if transfer_mode == "Excel file":
             features["transfer_mode"] = "excel"
-            features["transfer_excel"] = str(st.session_state.get("transfer_excel") or "").strip()
-            features["double_stack"] = bool(st.session_state.get("transfer_double_stack", False))
-        elif mode_label == "Fixed cost":
+            features["transfer_excel"] = str(st.session_state.get("new_transfer_excel", "")).strip()
+            features["double_stack"] = bool(st.session_state.get("new_double_stack", False))
+        
+        elif transfer_mode == "Fixed cost":
             features["transfer_mode"] = "fixed"
-            try:
-                features["transfer_fixed"] = float(st.session_state.get("transfer_fixed") or 0.0)
-            except Exception:
-                features["transfer_fixed"] = 0.0
-        # other/empty -> nothing extra
-
+            features["transfer_fixed"] = float(st.session_state.get("new_transfer_fixed", 0.0) or 0.0)
+    
     return {
-        "id": (st.session_state.get("wh_id") or "").strip(),
-        "name": (st.session_state.get("wh_name") or "").strip(),
-        "rates": {
-            "inbound": float(st.session_state.get("rate_inbound") or 0.0),
-            "outbound": float(st.session_state.get("rate_outbound") or 0.0),
-            "storage": float(st.session_state.get("rate_storage") or 0.0),
-            "order_fee": float(st.session_state.get("rate_order_fee") or 0.0),
-        },
+        "id": warehouse_id,
+        "name": warehouse_name,
+        "rates": rates,
         "features": features,
     }
 
 
-def _render_user_label_preview(draft: Dict[str, Any]) -> None:
-    """Render a compact, user-facing label preview for the warehouse."""
-    st.write("**User label preview**")
-    title = draft.get("name") or draft.get("id") or "Unnamed"
-    st.markdown(f"### {title}")
+# ============================================================================
+# VALIDATION & PERSISTENCE
+# ============================================================================
 
-    feats = draft.get("features", {}) or {}
-    chips = []
-    if feats.get("labeling"):
-        chips.append("Labeling")
-    if feats.get("transfer"):
-        chips.append("Transfer")
-    if feats.get("second_leg"):
-        chips.append("Second-leg")
-
-    st.markdown(" ".join(f"`{c}`" for c in chips) if chips else "_No active features_")
-    r = draft.get("rates", {}) or {}
-    st.caption(
-        f"Rates → In:{r.get('inbound', 0)}  Out:{r.get('outbound', 0)}  "
-        f"Storage/w:{r.get('storage', 0)}  Order fee:{r.get('order_fee', 0)}"
+def save_warehouse(warehouse_data: Dict[str, Any], msg_area) -> bool:
+    """
+    Validate and save warehouse to catalog.
+    
+    Args:
+        warehouse_data: Complete warehouse configuration
+        msg_area: Streamlit container for messages
+        
+    Returns:
+        True if save successful, False otherwise
+    """
+    # Validate basic data
+    is_valid, error_msg = validate_warehouse_data(
+        warehouse_data.get("id", ""),
+        warehouse_data.get("name", "")
     )
-    # Labeling preview
-    lc = feats.get("label_costs")
-    if isinstance(lc, dict):
-        st.caption(f"Labeling per piece → label: {lc.get('label',0)} | labelling: {lc.get('labelling',0)}")
+    
+    if not is_valid:
+        msg_area.error(f"❌ {error_msg}")
+        return False
+    
+    warehouse_id = warehouse_data["id"]
+    
+    # Check for duplicates
+    catalog = load_catalog()
+    existing_ids = {w.get("id") for w in list_warehouses(catalog) if w.get("id")}
+    
+    if warehouse_id in existing_ids:
+        msg_area.error(f"❌ Warehouse ID '{warehouse_id}' already exists. Choose a unique ID.")
+        return False
+    
+    # Save to catalog
+    try:
+        updated_catalog, was_new = upsert_warehouse(catalog, warehouse_id, warehouse_data)
+        save_catalog(updated_catalog)
+    except Exception as e:
+        msg_area.error(f"❌ Save failed: {e}")
+        st.error(f"🐛 Debug: {type(e).__name__}: {str(e)}")
+        return False
+    
+    # Verify save
+    try:
+        reloaded = load_catalog()
+        reloaded_ids = {w.get("id") for w in list_warehouses(reloaded) if w.get("id")}
+        
+        if warehouse_id not in reloaded_ids:
+            msg_area.error(f"❌ Verification failed: '{warehouse_id}' not found after save!")
+            st.error("🐛 Save appeared to succeed but warehouse missing from reloaded catalog.")
+            return False
+    
+    except Exception as e:
+        msg_area.warning(f"⚠️ Could not verify save (but save likely succeeded): {e}")
+    
+    # Success - cleanup
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+    
+    st.session_state["last_added_id"] = warehouse_id
+    msg_area.success(f"✅ Warehouse '{warehouse_id}' created successfully!")
+    st.toast("Warehouse saved", icon="✅")
+    st.balloons()
+    
+    reset_form()
+    return True
 
 
-# ---------------- page ----------------
+# ============================================================================
+# PREVIEW RENDERING
+# ============================================================================
+
+def render_preview(warehouse_data: Dict[str, Any]) -> None:
+    """
+    Render preview panel showing warehouse configuration.
+    
+    Args:
+        warehouse_data: Warehouse configuration to preview
+    """
+    st.divider()
+    st.subheader("📋 Preview")
+    
+    # Raw JSON
+    st.write("**Configuration (JSON)**")
+    st.code(json.dumps(warehouse_data, indent=2), language="json")
+    
+    # User-friendly summary
+    st.write("**Summary**")
+    st.markdown(f"### {warehouse_data.get('name', 'Unnamed')} ({warehouse_data.get('id', 'no-id')})")
+    
+    # Feature badges
+    features = warehouse_data.get("features", {}) or {}
+    badges = []
+    if features.get("labeling"):
+        badges.append("`Labeling`")
+    if features.get("transfer"):
+        badges.append("`Transfer`")
+    if features.get("second_leg"):
+        badges.append("`Second-leg`")
+    
+    if badges:
+        st.markdown(" ".join(badges))
+    else:
+        st.markdown("_No active features_")
+    
+    # Rates summary
+    rates = warehouse_data.get("rates", {}) or {}
+    st.caption(
+        f"Rates → In: €{rates.get('inbound', 0):.2f} | "
+        f"Out: €{rates.get('outbound', 0):.2f} | "
+        f"Storage: €{rates.get('storage', 0):.2f}/week | "
+        f"Order fee: €{rates.get('order_fee', 0):.2f}"
+    )
+    
+    # Labeling details
+    if features.get("labeling"):
+        label_opts = features.get("label_options")
+        label_costs = features.get("label_costs")
+        
+        if isinstance(label_opts, dict):
+            st.caption(
+                f"Label options → Simple: €{label_opts.get('simple', 0):.3f} | "
+                f"Complex: €{label_opts.get('complex', 0):.3f}"
+            )
+        elif isinstance(label_costs, dict):
+            st.caption(
+                f"Label costs → Label: €{label_costs.get('label', 0):.3f} | "
+                f"Labelling: €{label_costs.get('labelling', 0):.3f}"
+            )
+
+
+# ============================================================================
+# MAIN PAGE
+# ============================================================================
+
 def show() -> None:
     """Render the Add Warehouse page."""
-    _ensure_state()
+    ensure_session_state()
+    
     st.title("Admin • Add Warehouse")
-
-    st.subheader("Basic info")
-    st.text_input("Warehouse ID", key="wh_id", placeholder="e.g., nl_svz")
-    st.text_input("Name", key="wh_name", placeholder="e.g., SVZ Logistics")
-
+    st.caption("Create a new warehouse configuration")
+    
+    # -------------------------------------------------------------------------
+    # BASIC INFORMATION
+    # -------------------------------------------------------------------------
+    st.subheader("Basic Information")
+    
+    st.text_input(
+        "Warehouse ID",
+        key="new_wh_id",
+        placeholder="e.g., nl_svz, de_offergeld",
+        help="Unique identifier (letters, numbers, underscores, hyphens only)"
+    )
+    
+    st.text_input(
+        "Warehouse Name",
+        key="new_wh_name",
+        placeholder="e.g., SVZ Logistics NL",
+        help="Display name for the warehouse"
+    )
+    
     st.divider()
-    st.subheader("Rates")
+    
+    # -------------------------------------------------------------------------
+    # RATES
+    # -------------------------------------------------------------------------
     c1, c2, c3, c4 = st.columns(4)
+    
     with c1:
-        st.number_input("Inbound €/pallet", key="rate_inbound", min_value=0.0, step=0.5, format="%.2f")
+        st.number_input(
+            "Inbound (€/pallet)",
+            key="new_rate_inbound",
+            min_value=0.0,
+            step=0.5,
+            format="%.2f"
+        )
+    
     with c2:
-        st.number_input("Outbound €/pallet", key="rate_outbound", min_value=0.0, step=0.5, format="%.2f")
+        st.number_input(
+            "Outbound (€/pallet)",
+            key="new_rate_outbound",
+            min_value=0.0,
+            step=0.5,
+            format="%.2f"
+        )
+    
     with c3:
-        st.number_input("Storage €/pallet/week", key="rate_storage", min_value=0.0, step=0.5, format="%.2f")
+        st.number_input(
+            "Storage (€/pallet/week)",
+            key="new_rate_storage",
+            min_value=0.0,
+            step=0.5,
+            format="%.2f"
+        )
+    
     with c4:
-        st.number_input("Order fee €", key="rate_order_fee", min_value=0.0, step=0.5, format="%.2f")
-
+        st.number_input(
+            "Order fee (€)",
+            key="new_rate_order_fee",
+            min_value=0.0,
+            step=0.5,
+            format="%.2f"
+        )
+    
     st.divider()
+    
+    # -------------------------------------------------------------------------
+    # FEATURES
+    # -------------------------------------------------------------------------
     st.subheader("Features")
+    
+    # Feature toggles
     f1, f2, f3 = st.columns(3)
+    
     with f1:
-        st.checkbox("Labeling", key="feat_labeling")
+        labeling_enabled = st.checkbox("Labeling", key="new_feat_labeling")
+    
     with f2:
-        st.checkbox("Transfer", key="feat_transfer")
+        transfer_enabled = st.checkbox("Transfer", key="new_feat_transfer")
+    
     with f3:
-        st.checkbox("Second Warehouse Transfer", key="feat_second_leg_enabled")
-
-    # ---- Labeling options (only when checked) ----
-    if st.session_state.get("feat_labeling", False):
-        st.markdown("##### Labeling rates (per piece)")
-        l1, l2 = st.columns(2)
-        with l1:
-            st.number_input(
-                "Label (€ / piece)",
-                key="lab_label",
-                min_value=0.0,
-                step=0.001,
-                format="%.3f",
-            )
-        with l2:
-            st.number_input(
-                "Labelling (€ / piece)",
-                key="lab_labelling",
-                min_value=0.0,
-                step=0.001,
-                format="%.3f",
-            )
+        st.checkbox("Second Warehouse Transfer", key="new_feat_second_leg")
+    
+    # ---- Labeling Configuration ----
+    if labeling_enabled:
         st.markdown("---")
-    else:
-        for k in ["lab_label", "lab_labelling"]:
-            if k in st.session_state:
-                del st.session_state[k]
-    # ----------------------------------------------
-
-    # ---- Transfer options (only when checked) ----
-    if st.session_state.get("feat_transfer", False):
-        st.markdown("##### Transfer options")
-        t1, t2, t3 = st.columns([1.2, 1.2, 1])
-        with t1:
-            st.selectbox(
-                "Mode",
-                options=["", "Excel file", "Fixed cost"],
-                key="transfer_mode_label",
-                help="Excel file: pallets→truck_cost tablosu okur. Fixed cost: tek toplam €.",
-            )
-        # Excel mode fields
-        if (st.session_state.get("transfer_mode_label") or "") == "Excel file":
-            e1, e2 = st.columns([2, 1])
-            with e1:
-                st.text_input(
-                    "Excel file path",
-                    key="transfer_excel",
-                    placeholder="e.g. data/de_transfer_rates.xlsx",
-                    help="İlk sayfada 'pallets' ve 'truck_cost' kolonları.",
+        
+        # Checkbox for advanced mode
+        use_advanced = st.checkbox(
+            "Enable advanced labeling (Simple/Complex options)",
+            key="new_use_advanced_labels",
+            help="Use two-tier labeling system"
+        )
+        
+        if use_advanced:
+            st.caption("⚡ Advanced mode: Two-tier labeling system")
+            
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                # Label (disabled in advanced mode)
+                st.number_input(
+                    "Label (€/piece)",
+                    min_value=0.0,
+                    step=0.001,
+                    format="%.3f",
+                    value=0.0,
+                    disabled=True,
+                    key="new_label_cost_disabled",
+                    help="Disabled in advanced mode"
                 )
-            with e2:
-                st.checkbox("Double Stack", key="transfer_double_stack")
-        # Fixed mode fields
-        elif (st.session_state.get("transfer_mode_label") or "") == "Fixed cost":
+            
+            with c2:
+                st.number_input(
+                    "Simple label (€/piece)",
+                    key="new_label_simple",
+                    min_value=0.0,
+                    step=0.001,
+                    format="%.3f",
+                    value=0.03,
+                    help="Standard label cost"
+                )
+            
+            with c3:
+                st.number_input(
+                    "Complex label (€/piece)",
+                    key="new_label_complex",
+                    min_value=0.0,
+                    step=0.001,
+                    format="%.3f",
+                    value=0.042,
+                    help="Complex label cost"
+                )
+            
             st.number_input(
-                "Fixed transfer amount (TOTAL €)",
-                key="transfer_fixed",
+                "Labelling service (€/piece)",
+                key="new_labelling_cost",
+                min_value=0.0,
+                step=0.001,
+                format="%.3f",
+                value=0.0,
+                help="Service fee (applies to both simple and complex)"
+            )
+        
+        else:
+            st.markdown("**Standard Labeling**")
+            
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.number_input(
+                    "Label (€/piece)",
+                    key="new_label_cost",
+                    min_value=0.0,
+                    step=0.001,
+                    format="%.3f",
+                    help="Label material cost"
+                )
+            
+            with c2:
+                st.number_input(
+                    "Labelling service (€/piece)",
+                    key="new_labelling_cost",
+                    min_value=0.0,
+                    step=0.001,
+                    format="%.3f",
+                    help="Labeling service fee"
+                )
+    
+    # ---- Transfer Configuration ----
+    if transfer_enabled:
+        st.markdown("---")
+        st.markdown("**Transfer Configuration**")
+        
+        t1, t2, t3 = st.columns([1.2, 1.2, 1])
+        
+        with t1:
+            transfer_mode = st.selectbox(
+                "Transfer mode",
+                options=["", "Excel file", "Fixed cost"],
+                key="new_transfer_mode",
+                help="Excel file: pallets→truck_cost lookup. Fixed cost: single amount."
+            )
+        
+        with t2:
+            if transfer_mode == "Excel file":
+                st.checkbox(
+                    "Double Stack",
+                    key="new_double_stack",
+                    help="Halves pallet count when looking up costs"
+                )
+        
+        # Mode-specific fields
+        if transfer_mode == "Excel file":
+            st.text_input(
+                "Excel file path",
+                key="new_transfer_excel",
+                placeholder="e.g., data/transfer_rates_nl_svz.json",
+                help="Path to JSON/Excel with 'pallets' and 'truck_cost' columns"
+            )
+        
+        elif transfer_mode == "Fixed cost":
+            st.number_input(
+                "Fixed transfer amount (€ total)",
+                key="new_transfer_fixed",
                 min_value=0.0,
                 step=1.0,
+                help="Single fixed cost per transfer leg"
             )
-        st.markdown("---")
-    else:
-        # transfer kapalıysa ilgili state'i temizleyelim ki payload'a sızmasın
-        for k in ["transfer_mode_label", "transfer_excel", "transfer_fixed", "transfer_double_stack"]:
-            if k in st.session_state:
-                del st.session_state[k]
-    # ---------------------------------------------
-
+    
     st.divider()
+    
+    # -------------------------------------------------------------------------
+    # ACTIONS
+    # -------------------------------------------------------------------------
     a1, a2, a3 = st.columns(3)
+    
     with a1:
-        if st.button("Preview", use_container_width=True):
-            st.session_state.add_preview_open = True
-
-    # Inline message area — directly under action buttons
+        if st.button("📋 Preview", use_container_width=True):
+            st.session_state.add_wh_preview_open = True
+            st.rerun()
+    
+    # Message area (inline, under buttons)
     msg_area = st.empty()
-
-    def _do_save() -> None:
-        """
-        Validate, persist in catalog, clear cache, and reset the form.
-        
-        CRITICAL FIX: Now uses upsert_warehouse() to ensure format consistency
-        and verifies the save was successful by reloading the catalog.
-        """
-        draft = _collect_form_state()
-
-        # Validation
-        if not draft.get("id"):
-            msg_area.error("❌ Warehouse ID is required.")
-            return
-        if not draft.get("name"):
-            msg_area.error("❌ Name is required.")
-            return
-
-        wid = draft["id"]
-        catalog = load_catalog()
-        ws = list_warehouses(catalog)
-        ids = {w.get("id") for w in ws if w.get("id")}
-        if wid in ids:
-            msg_area.error(f"❌ Warehouse ID '{wid}' already exists. Choose a unique ID.")
-            return
-
-        # ← FIX 1: Use upsert_warehouse instead of manual list.append()
-        # This handles dict vs list format automatically
-        updated_catalog, was_new = upsert_warehouse(catalog, wid, draft)
-
-        try:
-            # ← FIX 2: save_catalog now has os.fsync() for guaranteed disk write
-            save_catalog(updated_catalog)
-        except Exception as e:  # noqa: BLE001
-            msg_area.error(f"❌ Save failed: {e}")
-            st.error(f"🐛 Debug: {type(e).__name__}: {str(e)}")
-            return
-
-        # ← FIX 3: VERIFY the warehouse was actually saved by reloading
-        try:
-            reloaded = load_catalog()
-            reloaded_ws = list_warehouses(reloaded)
-            reloaded_ids = {w.get("id") for w in reloaded_ws if w.get("id")}
-            
-            if wid not in reloaded_ids:
-                msg_area.error(f"❌ Verification failed: Warehouse '{wid}' not found after save!")
-                st.error("🐛 The save appeared to succeed but the warehouse is not in the reloaded catalog.")
-                st.error(f"🐛 Reloaded IDs: {sorted(reloaded_ids)}")
-                return
-                
-        except Exception as e:  # noqa: BLE001
-            msg_area.warning(f"⚠️ Could not verify save (but save likely succeeded): {e}")
-            # Don't return - the save probably worked, we just couldn't verify
-
-        # Success
-        try:
-            st.cache_data.clear()
-        except Exception:  # noqa: BLE001
-            pass
-
-        st.session_state["last_added_id"] = wid
-        msg_area.success(f"✅ Warehouse '{wid}' added and verified in catalog!")
-        st.toast("Saved successfully.", icon="✅")
-        st.balloons()
-        _reset_form()
-
+    
     with a2:
-        if st.button("Save", use_container_width=True):
-            _do_save()
-
+        if st.button("💾 Save", use_container_width=True, type="primary"):
+            warehouse_data = collect_form_data()
+            save_warehouse(warehouse_data, msg_area)
+    
     with a3:
-        if st.button("Reset form", use_container_width=True):
-            _reset_form()
-            msg_area.info("🔄 Form cleared.")
-
-    # Preview panel
-    if st.session_state.add_preview_open:
-        st.divider()
-        st.subheader("Preview")
-        draft = _collect_form_state()
-        st.write("**Draft payload**")
-        st.code(json.dumps(draft, indent=2))
-        _render_user_label_preview(draft)
-
+        if st.button("🔄 Reset", use_container_width=True):
+            reset_form()
+            msg_area.info("Form cleared")
+            st.rerun()
+    
+    # -------------------------------------------------------------------------
+    # PREVIEW PANEL
+    # -------------------------------------------------------------------------
+    if st.session_state.get("add_wh_preview_open", False):
+        warehouse_data = collect_form_data()
+        render_preview(warehouse_data)
+        
         b1, b2 = st.columns(2)
+        
         with b1:
             if st.button("Close preview", use_container_width=True):
-                st.session_state.add_preview_open = False
+                st.session_state.add_wh_preview_open = False
+                st.rerun()
+        
         with b2:
-            if st.button("Save from preview", use_container_width=True):
-                # Close panel first, then use the same save flow:
-                st.session_state.add_preview_open = False
-                _do_save()
+            if st.button("Save from preview", use_container_width=True, type="primary"):
+                st.session_state.add_wh_preview_open = False
+                if save_warehouse(warehouse_data, msg_area):
+                    st.rerun()
 
+
+# ============================================================================
+# ALIASES (for compatibility with different import styles)
+# ============================================================================
 
 def view() -> None:
     """Alias for router compatibility."""

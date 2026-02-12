@@ -161,7 +161,7 @@
         "inbound": 1.05,
         "outbound": 1.05,
         "storage": 0.91,
-        "order_fee": 0
+        "order_fee": 0.0
       },
       "features": {
         "labeling": true,

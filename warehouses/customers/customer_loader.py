@@ -20,7 +20,7 @@ def load_customers() -> tuple[List[Dict[str, Any]], Optional[str]]:
         if 'services.config_manager' in sys.modules:
             importlib.reload(sys.modules['services.config_manager'])
         
-        from services.config_manager import list_customers, get_catalog_path
+        from services.catalog import list_customers, get_catalog_path
         
         customers_list = list_customers()
         

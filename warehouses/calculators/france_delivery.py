@@ -1,4 +1,4 @@
-"""France delivery cost calculator."""
+"""Only France delivery cost calculator."""
 
 from __future__ import annotations
 import json
