@@ -114,8 +114,8 @@ def _build_targets_from_catalog(primary_label: str) -> Dict[str, WhRates]:
         Empty dict if catalog unavailable
     """
     try:
-        from services.config_manager import load_catalog
-        from services.catalog_adapter import normalize_catalog
+        from services.catalog.config_manager import load_catalog
+        from services.catalog.catalog_adapter import normalize_catalog
     except Exception:
         return {}
     
