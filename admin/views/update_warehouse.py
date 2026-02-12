@@ -32,6 +32,13 @@ from .helpers import (
     rates_block,
 )
 
+
+def _is_spedka_id(selected_id: str, wh_name: str | None = None) -> bool:
+    sid = (selected_id or "").strip().lower()
+    nm = (wh_name or "").strip().lower()
+    return sid == "sl_spedka" or "spedka" in nm
+
+
 def page_update_warehouse():
     st.title("Admin • Update Warehouse")
 
@@ -115,14 +122,13 @@ def page_update_warehouse():
 
     # RATES
     rates_src = normalize_rates(w_orig.get("rates", {}))
-    # rates_block must build widget keys using the given prefix (e.g., f"{prefix}_inbound")
     rates = rates_block(skey("rates"), rates_src)
 
     # FEATURES
     feats = w_orig.get("features", {}) or {}
     st.subheader("Features")
 
-    # Labelling
+    # Labelling enabled
     lab_col, _ = st.columns([2, 3])
     with lab_col:
         labeling = st.checkbox(
@@ -131,24 +137,79 @@ def page_update_warehouse():
             key=skey("feat_labeling"),
         )
 
-    label_costs = feats.get("label_costs") if isinstance(feats.get("label_costs"), dict) else {}
-    lc1, lc2 = st.columns(2)
-    with lc1:
-        label_per_piece = st.number_input(
-            "Label (€ / piece)",
-            min_value=0.0, step=0.001, format="%.3f",
-            value=float(label_costs.get("label", 0.0)) if labeling else 0.0,
-            disabled=not labeling,
-            key=skey("label_per_piece"),
-        )
-    with lc2:
-        labelling_per_piece = st.number_input(
-            "Labelling (€ / piece)",
-            min_value=0.0, step=0.001, format="%.3f",
-            value=float(label_costs.get("labelling", 0.0)) if labeling else 0.0,
-            disabled=not labeling,
-            key=skey("labelling_per_piece"),
-        )
+    # Determine SPEDKA based on id/name (using NEW name field too)
+    is_spedka = _is_spedka_id(selected_id, new_name or current_name)
+
+    # SPEDKA: label_options editor (JSON-driven)
+    if is_spedka:
+        opts = feats.get("label_options", {}) or {}
+        if not isinstance(opts, dict):
+            opts = {}
+
+        # defaults: from JSON label_options; fallback: from legacy label_costs
+        default_simple = float(opts.get("simple", 0.0) or 0.0)
+        default_complex = float(opts.get("complex", 0.0) or 0.0)
+
+        if default_simple == 0.0 and default_complex == 0.0:
+            legacy = feats.get("label_costs") if isinstance(feats.get("label_costs"), dict) else {}
+            legacy_sum = float(legacy.get("label", 0.0) or 0.0) + float(legacy.get("labelling", 0.0) or 0.0)
+            # treat legacy as simple
+            default_simple = legacy_sum
+
+        # If still empty, use the requested initial values
+        if default_simple == 0.0:
+            default_simple = 0.03
+        if default_complex == 0.0:
+            default_complex = 0.042
+
+        c1, c2 = st.columns(2)
+        with c1:
+            spedka_simple = st.number_input(
+                "Simple label (€ / piece)",
+                min_value=0.0,
+                step=0.001,
+                format="%.3f",
+                value=float(default_simple) if labeling else 0.0,
+                disabled=not labeling,
+                key=skey("spedka_simple"),
+            )
+        with c2:
+            spedka_complex = st.number_input(
+                "Complex label (€ / piece)",
+                min_value=0.0,
+                step=0.001,
+                format="%.3f",
+                value=float(default_complex) if labeling else 0.0,
+                disabled=not labeling,
+                key=skey("spedka_complex"),
+            )
+
+        st.caption("SPEDKA uses two labelling options. Rates are stored in catalog as features.label_options.simple/complex.")
+
+        # Keep legacy fields hidden for SPEDKA (avoid confusion)
+        label_per_piece = 0.0
+        labelling_per_piece = 0.0
+
+    else:
+        # Non-SPEDKA: legacy label_costs editor
+        label_costs = feats.get("label_costs") if isinstance(feats.get("label_costs"), dict) else {}
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            label_per_piece = st.number_input(
+                "Label (€ / piece)",
+                min_value=0.0, step=0.001, format="%.3f",
+                value=float(label_costs.get("label", 0.0)) if labeling else 0.0,
+                disabled=not labeling,
+                key=skey("label_per_piece"),
+            )
+        with lc2:
+            labelling_per_piece = st.number_input(
+                "Labelling (€ / piece)",
+                min_value=0.0, step=0.001, format="%.3f",
+                value=float(label_costs.get("labelling", 0.0)) if labeling else 0.0,
+                disabled=not labeling,
+                key=skey("labelling_per_piece"),
+            )
 
     st.markdown("---")
 
@@ -221,7 +282,7 @@ def page_update_warehouse():
     )
 
     # ---- SUCCESS BANNER PLACEHOLDER (right under the Save button)
-    msg_area = st.empty()  # <— banner burada görünecek
+    msg_area = st.empty()  # banner burada görünecek
 
     # Show persisted success message here after rerun
     if "__flash_success" in st.session_state:
@@ -237,11 +298,30 @@ def page_update_warehouse():
             "transfer": bool(transfer),
             "second_leg": bool(second_leg),
         }
+
         if labeling:
-            features_payload["label_costs"] = {
-                "label": float(label_per_piece or 0.0),
-                "labelling": float(labelling_per_piece or 0.0),
-            }
+            if is_spedka:
+                simple_val = float(st.session_state.get(skey("spedka_simple"), 0.0) or 0.0)
+                complex_val = float(st.session_state.get(skey("spedka_complex"), 0.0) or 0.0)
+
+                # Main, data-driven source for user app
+                features_payload["label_options"] = {
+                    "simple": float(simple_val),
+                    "complex": float(complex_val),
+                }
+
+                # Backward compatibility (optional): keep label_costs present
+                # We'll store "simple" as legacy total-per-piece in label_costs.label
+                features_payload["label_costs"] = {
+                    "label": float(simple_val),
+                    "labelling": 0.0,
+                }
+            else:
+                features_payload["label_costs"] = {
+                    "label": float(label_per_piece or 0.0),
+                    "labelling": float(labelling_per_piece or 0.0),
+                }
+
         if transfer:
             if transfer_mode_label == "Excel file":
                 features_payload["transfer_mode"] = "excel"
@@ -278,18 +358,14 @@ def page_update_warehouse():
         except Exception as e:
             msg_area.error(f"Save failed: {e}")
         else:
-            # Show green banner here immediately
             msg_area.success(f"Warehouse '{selected_id}' saved.")
-            # Toast for extra feedback
             st.toast("Changes saved.", icon="✅")
-            # Persist banner across rerun (will render into the same msg_area)
             st.session_state["_next_select_id"] = selected_id
             st.session_state["__flash_success"] = f"Warehouse '{selected_id}' saved."
             try:
                 st.cache_data.clear()
             except Exception:
                 pass
-            # Rerun to refresh UI/labels
             try:
                 st.rerun()
             except AttributeError:
@@ -329,7 +405,6 @@ def page_update_warehouse():
                         st.session_state.pop("update_wh_select_id", None)
                     if st.session_state.get("last_added_id") == selected_id:
                         st.session_state.pop("last_added_id", None)
-                    # Persist delete banner across rerun at the same spot
                     st.session_state["__flash_success"] = f"Warehouse '{selected_id}' deleted."
                 finally:
                     st.session_state["__del_confirm__"] = False
@@ -347,12 +422,11 @@ def page_update_warehouse():
     from services.config_manager import get_catalog_path
     catalog_path = get_catalog_path()
     st.code(f"Catalog file location:\n{catalog_path}")
-    
-    # Check if file exists and show content
+
     if catalog_path.exists():
         st.success("✅ File exists!")
         import json
-        with open(catalog_path, 'r') as f:
+        with open(catalog_path, "r") as f:
             data = json.load(f)
         st.json(data)
     else:

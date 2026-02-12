@@ -167,6 +167,10 @@
         "labeling": true,
         "transfer": false,
         "second_leg": false,
+        "label_options": {
+          "simple": 0.03,
+          "complex": 0.042
+        },
         "label_costs": {
           "label": 0.03,
           "labelling": 0.0
