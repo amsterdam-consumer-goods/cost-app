@@ -35,30 +35,16 @@ Related Files:
 """
 
 from __future__ import annotations
-
 from typing import List, Dict, Any, Tuple, Optional
 import streamlit as st
-import sys
-import importlib.util
-from pathlib import Path
 
-# ============================================================================
-# MODULE IMPORTS
-# ============================================================================
-
-# Load config_manager without altering sys.path
-_root = Path(__file__).resolve().parents[2]
-_cm_path = _root / "services" / "config_manager.py"
-_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
-_cm = importlib.util.module_from_spec(_spec)
-sys.modules["services.config_manager"] = _cm
-_spec.loader.exec_module(_cm)
-
-load_catalog = _cm.load_catalog
-save_catalog = _cm.save_catalog
-add_customer = _cm.add_customer
-list_warehouse_ids = _cm.list_warehouse_ids
-get_last_warning = getattr(_cm, "get_last_warning", lambda: None)
+from services.catalog import (
+    load_catalog,
+    save_catalog,
+    add_customer,
+    list_warehouse_ids,
+    get_last_warning,
+)
 
 
 # ============================================================================

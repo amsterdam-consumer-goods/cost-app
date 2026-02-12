@@ -38,30 +38,18 @@ Related Files:
 - services/config_manager.py: Catalog persistence layer
 """
 
+from __future__ import annotations
 import streamlit as st
-import sys
-import importlib.util
-from pathlib import Path
 from typing import Dict, Any
 
-# ============================================================================
-# MODULE IMPORTS
-# ============================================================================
+from services.catalog import (
+    load_catalog,
+    save_catalog,
+    list_warehouses,
+    get_wh_by_id,
+    get_catalog_path,
+)
 
-# Manually load config_manager module
-_root = Path(__file__).resolve().parents[2]
-_cm_path = _root / "services" / "config_manager.py"
-_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
-_cm = importlib.util.module_from_spec(_spec)
-sys.modules["services.config_manager"] = _cm
-_spec.loader.exec_module(_cm)
-
-load_catalog = _cm.load_catalog
-save_catalog = _cm.save_catalog
-list_warehouses = _cm.list_warehouses
-get_wh_by_id = _cm.get_wh_by_id
-
-# Import local helpers
 from .helpers import (
     default_rates,
     default_features,
@@ -647,7 +635,7 @@ def page_update_warehouse():
     # -------------------------------------------------------------------------
     
     with st.expander("🔍 Debug Info", expanded=False):
-        from services.config_manager import get_catalog_path
+        from services.catalog.config_manager import get_catalog_path
         
         catalog_path = get_catalog_path()
         st.code(f"Catalog file: {catalog_path}")

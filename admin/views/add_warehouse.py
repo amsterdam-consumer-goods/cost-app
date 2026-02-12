@@ -33,33 +33,17 @@ Related Files:
 """
 
 from __future__ import annotations
-
 import json
 from typing import Any, Dict
-
 import streamlit as st
-import sys
-import importlib.util
-from pathlib import Path
 
-# ============================================================================
-# MODULE IMPORTS
-# ============================================================================
+from services.catalog import (
+    load_catalog,
+    save_catalog,
+    list_warehouses,
+    upsert_warehouse,
+)
 
-# Manually load config_manager module (avoids sys.path pollution)
-_root = Path(__file__).resolve().parents[2]
-_cm_path = _root / "services" / "config_manager.py"
-_spec = importlib.util.spec_from_file_location("services.config_manager", _cm_path)
-_cm = importlib.util.module_from_spec(_spec)
-sys.modules["services.config_manager"] = _cm
-_spec.loader.exec_module(_cm)
-
-load_catalog = _cm.load_catalog
-save_catalog = _cm.save_catalog
-list_warehouses = _cm.list_warehouses
-upsert_warehouse = _cm.upsert_warehouse
-
-# Import local helpers
 from .helpers import (
     default_rates,
     default_features,
