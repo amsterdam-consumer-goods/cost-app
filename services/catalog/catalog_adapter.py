@@ -26,48 +26,46 @@ Related Files:
 from __future__ import annotations
 from typing import Any, Dict, Optional
 
-from .config_manager import load_catalog, list_warehouses
+from __future__ import annotations
+from typing import Any, Dict, Optional
 
 
 def normalize_catalog(catalog: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Normalize catalog structure to consistent format.
-    
-    Ensures catalog always has:
-    - 'warehouses': List of warehouse dicts
-    - 'customers': Dict or list of customer data
-    
-    Process:
-    1. If catalog is None, load from storage
-    2. Use list_warehouses for consistent warehouse list
-    3. Preserve customer data structure
-    4. Return normalized dict
+    Normalize catalog structure to standard format.
     
     Args:
-        catalog: Optional catalog dict (loads if None)
+        catalog: Optional catalog dict. If None, loads from storage.
         
     Returns:
-        Normalized catalog dict with consistent structure
-        
-    Example:
-        >>> catalog = normalize_catalog()
-        >>> catalog.keys()
-        dict_keys(['warehouses', 'customers'])
-        >>> type(catalog['warehouses'])
-        <class 'list'>
+        Normalized catalog with 'warehouses' and 'customers' keys
     """
-    # Load catalog if not provided
+    # Lazy import to avoid circular dependency
     if catalog is None:
+        from .config_manager import load_catalog
         catalog = load_catalog()
     
-    # Use config_manager's list_warehouses for consistent normalization
-    # This handles various warehouse list formats
-    warehouses = list_warehouses(catalog)
+    # Ensure top-level keys exist
+    if not isinstance(catalog, dict):
+        catalog = {}
     
-    # Preserve customers (dict or list format)
-    customers = catalog.get("customers", {})
+    catalog.setdefault("warehouses", [])
+    catalog.setdefault("customers", [])
     
-    return {
-        "warehouses": warehouses,
-        "customers": customers,
-    }
+    # Normalize warehouses to list format
+    warehouses = catalog.get("warehouses")
+    
+    if isinstance(warehouses, dict):
+        # Convert dict format to list format
+        from .config_manager import list_warehouses
+        catalog["warehouses"] = list_warehouses(catalog)
+    elif not isinstance(warehouses, list):
+        catalog["warehouses"] = []
+    
+    # Normalize customers (support both list and dict formats)
+    customers = catalog.get("customers")
+    
+    if not isinstance(customers, (list, dict)):
+        catalog["customers"] = []
+    
+    return catalog
